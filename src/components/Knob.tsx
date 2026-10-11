@@ -1,6 +1,6 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
 import { noteName } from '../audio/dsp';
-import { SWEEP, followPointer, startKnobDrag, type KnobDrag } from './knobMath';
+import { SWEEP, followPointer, fromNorm, startKnobDrag, toNorm, type KnobDrag } from './knobMath';
 
 interface KnobProps {
   label: string;
@@ -15,16 +15,6 @@ interface KnobProps {
   size?: number;
   color?: string;
   onChange: (value: number) => void;
-}
-
-function toNorm(value: number, min: number, max: number, log: boolean): number {
-  const t = log ? Math.log(value / min) / Math.log(max / min) : (value - min) / (max - min);
-  return Math.min(1, Math.max(0, t));
-}
-
-function fromNorm(t: number, min: number, max: number, log: boolean): number {
-  const c = Math.min(1, Math.max(0, t));
-  return log ? min * Math.pow(max / min, c) : min + c * (max - min);
 }
 
 function formatValue(value: number, unit?: string): string {

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { engine } from '../../audio/core/engineInstance';
 import { num, str } from '../../audio/dsp';
 import { BUILT_IN_SAMPLES, isBuiltInSample, loadSampleBuffer } from '../../audio/sampleLibrary';
-import { listSamples, putSample, type SampleListing } from '../../io/sampleStore';
+import { importAudioFile } from '../../io/files';
+import { listSamples, type SampleListing } from '../../io/sampleStore';
 import { useProjectStore, type SynthNode } from '../../state/projectStore';
 
 const WAVE_W = 560;
@@ -85,12 +86,9 @@ export function SamplePanel({ node, color }: { node: SynthNode; color: string })
     if (!file) return;
     setError(null);
     try {
-      const data = await file.arrayBuffer();
-      await engine.ctx.decodeAudioData(data.slice(0)); // validate before keeping it
-      const id = `user:${crypto.randomUUID().slice(0, 12)}`;
-      await putSample({ id, name: file.name, data, added: Date.now() });
+      const { id, name } = await importAudioFile(file, engine.ctx);
       setUserSamples(await listSamples());
-      updateParams(node.id, { sampleId: id, sampleName: file.name, root: 60, _preset: '' });
+      updateParams(node.id, { sampleId: id, sampleName: name, root: 60, _preset: '' });
     } catch {
       setError(`Couldn't read "${file.name}" as audio. Try a WAV, MP3, OGG or FLAC file.`);
     }

@@ -3,7 +3,7 @@ import { newNoteId } from '../audio/clips';
 import { engine } from '../audio/core/engineInstance';
 import type { Note, NoteClip } from '../audio/core/types';
 import { noteName } from '../audio/dsp';
-import { pressNote, releaseNote, useLiveStore } from '../state/liveInput';
+import { NO_HELD, pressNote, releaseNote, useLiveStore } from '../state/liveInput';
 import { useProjectStore, useTransportStore } from '../state/projectStore';
 
 const TOP_PITCH = 96; // C7
@@ -37,7 +37,7 @@ interface PianoRollProps {
 export function PianoRoll({ nodeId, clip, color }: PianoRollProps) {
   const setNotes = useProjectStore((s) => s.setNotes);
   const currentStep = useTransportStore((s) => s.currentStep);
-  const held = useLiveStore((s) => s.held);
+  const held = useLiveStore((s) => s.held[nodeId] ?? NO_HELD);
   const [selected, setSelected] = useState<string | null>(null);
   const [drawLength, setDrawLength] = useState(2);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -195,10 +195,10 @@ export function PianoRoll({ nodeId, clip, color }: PianoRollProps) {
                   ].join(' ')}
                   onPointerDown={(e) => {
                     e.currentTarget.setPointerCapture(e.pointerId);
-                    pressNote(pitch, 0.8, nodeId);
+                    pressNote(pitch, 0.8, nodeId, 'mouse');
                   }}
-                  onPointerUp={() => releaseNote(pitch)}
-                  onPointerCancel={() => releaseNote(pitch)}
+                  onPointerUp={() => releaseNote(pitch, nodeId, 'mouse')}
+                  onPointerCancel={() => releaseNote(pitch, nodeId, 'mouse')}
                 >
                   {pitch % 12 === 0 ? noteName(pitch) : ''}
                 </div>

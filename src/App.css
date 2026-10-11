@@ -8,8 +8,9 @@
 
 .app-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 20px;
+  gap: 10px 20px;
   padding: 10px 18px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
@@ -20,6 +21,22 @@
   align-items: baseline;
   gap: 10px;
   margin-right: auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .app-header {
+    gap: 8px 12px;
+    padding: 8px 12px;
+  }
+
+  .subtitle {
+    display: none;
+  }
+
+  .transport {
+    gap: 10px;
+  }
 }
 
 .brand-mark {
@@ -337,13 +354,58 @@
 
 .context-menu {
   position: fixed;
-  z-index: 10;
-  width: 190px;
-  padding: 8px;
+  z-index: 30;
+  min-width: 190px;
+  max-width: 340px;
+  padding: 6px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.context-menu-title {
+  padding: 4px 8px 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: var(--panel-light);
+}
+
+.context-menu-item:disabled {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.context-menu-item.danger {
+  color: #ff7b72;
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border);
 }
 
 .react-flow {
@@ -1230,4 +1292,317 @@
 
 .knob-dial:active {
   cursor: grabbing;
+}
+
+/* ---------- Phase 3: MIDI, dialogs, sharing ---------- */
+
+/* Note (MIDI) ports are diamonds; their cables are dashed. */
+.react-flow__handle.port.note-port {
+  border-radius: 2px;
+  background: #c3e88d;
+}
+
+.react-flow__handle-left.note-port {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.react-flow__handle-right.note-port {
+  transform: translate(50%, -50%) rotate(45deg);
+}
+
+.react-flow__handle.port-in.note-port.plugged {
+  background: #e3f5cd;
+}
+
+/* MIDI-learnable controls (display: contents keeps the panel layout as-is). */
+.param-control {
+  display: contents;
+}
+
+.param-control.learning .knob-dial,
+.param-control.learning .param-toggle button,
+.param-control.learning .segmented,
+.param-control.learning select {
+  outline: 2px solid #c3e88d;
+  outline-offset: 2px;
+  animation: rec-pulse 0.9s ease-in-out infinite;
+}
+
+.param-control.mapped .knob-label::after,
+.param-control.mapped .param-select-label::after {
+  content: ' •';
+  color: #c3e88d;
+}
+
+.learn-banner {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #1c1c1e;
+  background: #c3e88d;
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.learn-banner kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.midi-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.midi-light {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4a4a50;
+}
+
+.midi-button.ready .midi-light {
+  background: #5a8a3a;
+}
+
+.midi-button.ready .midi-light.flash {
+  animation: midi-flash 0.3s ease-out;
+}
+
+@keyframes midi-flash {
+  from {
+    background: #c3e88d;
+    box-shadow: 0 0 8px #c3e88d;
+  }
+}
+
+.midi-button.denied .midi-light,
+.midi-button.unsupported .midi-light {
+  background: #c8352d;
+}
+
+.midi-button.pending .midi-light {
+  background: var(--amber);
+}
+
+.midi-panel {
+  width: 300px;
+  padding: 2px 8px 8px;
+  font-size: 12.5px;
+  white-space: normal;
+}
+
+.midi-panel p {
+  margin: 4px 0 8px;
+  line-height: 1.45;
+}
+
+.midi-panel h4 {
+  margin: 14px 0 6px;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.midi-dim {
+  color: var(--text-dim);
+}
+
+.midi-dim b {
+  color: var(--text);
+  font-weight: normal;
+}
+
+.midi-device {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.midi-mappings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.midi-mappings li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+/* Dialogs */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.modal {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 16px 18px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--amber);
+}
+
+.dialog-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.dialog-row input,
+.dialog-row select {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--step-off);
+  border-radius: 6px;
+  padding: 7px 9px;
+}
+
+.dialog-row select {
+  flex: 0 0 auto;
+}
+
+.dialog-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.dialog-note {
+  margin: 8px 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.dialog-note.warn {
+  color: #ffb86b;
+}
+
+.dialog-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.dialog-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+}
+
+.dialog-list-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog-list-info {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ghost-button.primary {
+  color: #1c1c1e;
+  background: var(--amber);
+  border-color: transparent;
+}
+
+.ghost-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Drum editor: key caps, per-voice samples, file drops */
+
+.track-key {
+  margin-left: 6px;
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: normal;
+  color: var(--text-dim);
+  border: 1px solid var(--step-off);
+  border-radius: 3px;
+}
+
+.track-row.drag-over,
+.voice-strip.drag-over {
+  outline: 2px dashed var(--amber);
+  outline-offset: -2px;
+}
+
+.voice-sample {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 12px;
+}
+
+.voice-sample-label {
+  font-size: 9.5px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.voice-sample-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

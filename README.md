@@ -20,9 +20,10 @@ Space toggles play/stop. **CLEAR** empties every pattern (your graph and sounds 
 - Drag from an **Out** port to an **In** port to connect. An input can take several cables, and they're summed.
 - Drop an effect onto a cable to splice it in, either dragged from the palette or an unconnected node dragged from the canvas. The cable lights up first.
 - Drag a cable off an input (or grab either end of it) and drop it on empty space to unplug it, or on another input to re-route it.
+- **Right-click to unhook:** right-click a cable to remove it, or a node or port to pick which of its cables to remove.
 - Select and press Delete to remove nodes or cables.
 
-Knobs are rotary: press and drag around one and it points at your mouse (drag further out for finer control, hold Shift to turn it slowly, double-click to reset).
+Knobs are rotary: press and drag around one and it points at your mouse (drag further out for finer control, hold Shift to turn it slowly, double-click to reset). Right-click any control for **MIDI learn**.
 
 ### Playing
 
@@ -30,6 +31,27 @@ Knobs are rotary: press and drag around one and it points at your mouse (drag fu
 - **● Rec** overdubs what you play into the clip, quantised to 16ths (it starts the transport if needed).
 - In the piano roll, click to add a note (drag to set its length), drag to move, drag the right edge to resize, and double-click or right-click to delete. Drag in the **Vel** lane to set loudness. Clips can be 1, 2 or 4 bars long, and each loops on its own length.
 - Each instrument has built-in presets, and **Save as…** keeps your own (stored in this browser).
+- The drum machine plays from the keyboard too: the row keys **A S D F G H J K L ; '** hit the voices top to bottom, and with **● Rec** on they're written into the pattern. Drop an audio file on a row to use your own sound for it.
+
+### MIDI
+
+- Click **MIDI** in the header to turn it on (Chrome or Edge; the browser asks once). The light blinks on incoming messages.
+- Notes play the instrument whose tab is open, or the one selected on the graph. For fixed routing, add a **MIDI In** node (under Control) and cable its dashed **Notes** output into instruments. Each MIDI In has a channel filter and a transpose.
+- MIDI pads play the drum machine using General MIDI drum notes (36 kick, 38 snare, 42 closed hat and so on).
+- **MIDI learn:** right-click any knob or switch, choose MIDI learn, then move a knob on your controller. Mappings are saved with the project, and the MIDI panel lists and removes them.
+
+### Saving & sharing
+
+- **Clip ▾** (in each instrument or drum editor):
+  - **Clip library**: save, load, share and delete named patterns and melodies, reusable in any project.
+  - **Import .mid**: quantised to 16ths, with a track picker for multi-track files.
+  - **Export .mid**, or **copy a share link** that adds the clip to the recipient's library.
+- **Project ▾** in the header:
+  - **Share link**: the whole project is packed into the URL and opens as a separate copy for whoever opens it.
+  - **Export / import project (.json)**.
+  - **Export MIDI**: every clip as one multi-track `.mid`, drums on channel 10.
+  - **Export audio**: an offline WAV render of 1–16 bars, exactly what the Output hears.
+- Samples you loaded yourself stay in this browser (IndexedDB) and aren't included in share links.
 
 ## What's in it
 
@@ -38,6 +60,7 @@ Knobs are rotary: press and drag around one and it points at your mouse (drag fu
 - **Bass Synth** (TB-303-style): mono, 24 dB filter with env mod and decay. Notes at 80%+ velocity accent, and overlapping notes slide.
 - **FM Synth** (DX7-style, 2 operators): ratio, index and a modulator envelope, with E.Piano, Bell, Pluck, Brass and Glass presets.
 - **Sampler**: plays an audio file pitched across the keys (root note, start offset, loop, ADSR, filter). Comes with built-in Pluck/Keys/Pad sounds. Files you load are kept in this browser's IndexedDB.
+- **MIDI In**: routes notes from MIDI devices into instruments over Notes cables.
 - **Effects**: Filter, Reverb, Delay, Distortion, Compressor.
 - **Utility**: Gain/Pan and a 4-channel Mixer.
 - **Output**: master volume, safety limiter and oscilloscope.
@@ -57,7 +80,8 @@ React Flow UI ──edits──▶ zustand project store ◀──subscribes─�
 - `src/audio/core/AudioEngine.ts` reconciles the store into live Web Audio nodes.
 - `src/audio/core/Transport.ts` is the shared clock, so every sequenced module stays in sync.
 - `src/audio/modules/` holds the DSP for each node type, built from raw Web Audio nodes. Instruments extend `NoteInstrument` (`instrument.ts`), which plays a note clip off the Transport and takes live `noteOn`/`noteOff`.
-- `src/state/projectStore.ts` holds the project data model and actions. `src/state/liveInput.ts` routes live notes (keys now, MIDI next) and handles recording.
+- `src/state/projectStore.ts` holds the project data model and actions. `src/state/liveInput.ts` routes live notes from keys, mouse and MIDI, and handles recording. `src/state/midiInput.ts` is the Web MIDI layer (routing, MIDI learn).
+- `src/io/` covers files and sharing: `.mid` conversion, project files, share links, WAV rendering, and the IndexedDB sample store.
 
 **Adding a node type:** write a class implementing `AudioModule` in `src/audio/modules/`, then add one entry to `NODE_DEFINITIONS`. The palette, graph node, inline knobs and the generic editor tab come for free. A node that needs a custom editor gets a branch in `src/components/editors/NodeEditor.tsx`.
 
@@ -65,5 +89,5 @@ React Flow UI ──edits──▶ zustand project store ◀──subscribes─�
 
 1. ~~Graph, tabs, drum machine with per-voice FX~~
 2. ~~Poly Synth, Bass Synth (303-style), FM Synth, Sampler, plus a piano roll and live computer-keyboard play~~
-3. Web MIDI input and MIDI-learn, `.mid` import/export, clip library, project files, WAV export, share links
+3. ~~Web MIDI input and MIDI-learn, `.mid` import/export, clip library, project files, WAV export, share links~~
 4. Later: modulation cables (LFO → any knob), an AudioWorklet expression node, subgraphs

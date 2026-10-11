@@ -2,74 +2,101 @@ import { create } from 'zustand';
 import { newNoteId } from '../audio/clips';
 import { engine } from '../audio/core/engineInstance';
 import { getNodeDefinition } from '../audio/core/nodeRegistry';
+import { STEP_COUNT, trackForDrumNote } from '../audio/tracks';
 import { GRAPH_TAB, useProjectStore } from './projectStore';
 
-// Live playing from any source (computer keys, on-screen keyboard, later MIDI):
-// routes notes to an instrument, tracks what's held, and records into the clip
-// while Rec is armed and the transport is running.
+// Live playing from any source (computer keys, on-screen keys, MIDI): routes
+// notes to an instrument, tracks what's held, and records into the clip while
+// Rec is armed and the transport is running.
+
+export type LiveSource = 'keys' | 'mouse' | 'midi';
 
 interface LiveState {
-  held: number[];
+  held: Record<string, number[]>; // target node id -> pitches currently held
   octave: number; // octave of the computer keyboard's A key (4 => C4)
   recordArmed: boolean;
 }
 
-export const useLiveStore = create<LiveState>(() => ({ held: [], octave: 4, recordArmed: false }));
+export const useLiveStore = create<LiveState>(() => ({ held: {}, octave: 4, recordArmed: false }));
 
 export const DEFAULT_VELOCITY = 0.7;
+export const NO_HELD: number[] = [];
 
 interface HeldNote {
+  source: LiveSource;
   target: string;
+  pitch: number;
   velocity: number;
   startPosition: number | null;
 }
 
-const heldNotes = new Map<number, HeldNote>();
+const heldNotes = new Map<string, HeldNote>();
+
+const keyOf = (source: LiveSource, target: string, pitch: number) => `${source}:${target}:${pitch}`;
 
 function publishHeld() {
-  useLiveStore.setState({ held: [...heldNotes.keys()] });
+  const held: Record<string, number[]> = {};
+  for (const note of heldNotes.values()) (held[note.target] ??= []).push(note.pitch);
+  useLiveStore.setState({ held });
+}
+
+export function isPlayableNode(id: string): boolean {
+  const node = useProjectStore.getState().nodes.find((n) => n.id === id);
+  return getNodeDefinition(node?.type)?.playable === true;
 }
 
 // The instrument whose editor tab is in front, or the single selected instrument on the graph.
 export function liveTarget(): string | null {
   const { activeTab, nodes } = useProjectStore.getState();
-  const isPlayable = (id: string) => getNodeDefinition(nodes.find((n) => n.id === id)?.type)?.playable === true;
-  if (activeTab !== GRAPH_TAB) return isPlayable(activeTab) ? activeTab : null;
+  if (activeTab !== GRAPH_TAB) return isPlayableNode(activeTab) ? activeTab : null;
   const selected = nodes.filter((n) => n.selected);
-  return selected.length === 1 && isPlayable(selected[0].id) ? selected[0].id : null;
+  return selected.length === 1 && isPlayableNode(selected[0].id) ? selected[0].id : null;
 }
 
-export function pressNote(pitch: number, velocity = DEFAULT_VELOCITY, target: string | null = liveTarget()) {
-  if (!target || heldNotes.has(pitch)) return;
+export function pressNote(pitch: number, velocity: number, target: string, source: LiveSource) {
+  const key = keyOf(source, target, pitch);
+  if (heldNotes.has(key)) return;
   engine.noteOn(target, pitch, velocity);
-  heldNotes.set(pitch, { target, velocity, startPosition: engine.playheadPosition() });
+  heldNotes.set(key, { source, target, pitch, velocity, startPosition: engine.playheadPosition() });
   publishHeld();
 }
 
-export function releaseNote(pitch: number) {
-  const held = heldNotes.get(pitch);
+function release(key: string) {
+  const held = heldNotes.get(key);
   if (!held) return;
-  heldNotes.delete(pitch);
-  engine.noteOff(held.target, pitch);
+  heldNotes.delete(key);
+  engine.noteOff(held.target, held.pitch);
   publishHeld();
   const end = engine.playheadPosition();
   if (useLiveStore.getState().recordArmed && held.startPosition !== null && end !== null) {
-    recordNote(held.target, pitch, held.velocity, held.startPosition, end);
+    recordNote(held.target, held.pitch, held.velocity, held.startPosition, end);
   }
 }
 
-export function releaseAllNotes() {
-  for (const pitch of [...heldNotes.keys()]) releaseNote(pitch);
+export function releaseNote(pitch: number, target: string, source: LiveSource) {
+  release(keyOf(source, target, pitch));
+}
+
+// Release everything a source is holding (keys on window blur, MIDI when switched off).
+export function releaseSource(source: LiveSource) {
+  for (const [key, note] of heldNotes) if (note.source === source) release(key);
 }
 
 // Overdub a played note into the target's clip, quantised to the 16th grid.
+// Drum machines get the hit's step switched on instead.
 export function recordNote(target: string, pitch: number, velocity: number, startPosition: number, endPosition: number) {
-  const { clips, setNotes } = useProjectStore.getState();
+  const { clips, setNotes, setDrumStep } = useProjectStore.getState();
   const clip = clips[target];
-  if (clip?.kind !== 'notes') return;
+  if (!clip) return;
+  const length = clip.kind === 'notes' ? clip.length : STEP_COUNT;
   const startStep = Math.round(startPosition);
-  const start = ((startStep % clip.length) + clip.length) % clip.length;
-  const length = Math.min(clip.length - start, Math.max(1, Math.round(endPosition - startPosition)));
+  const start = ((startStep % length) + length) % length;
+  if (clip.kind === 'drum') {
+    const track = trackForDrumNote(pitch);
+    if (track) setDrumStep(target, track, start, true);
+    return;
+  }
+  const noteLength = Math.min(length - start, Math.max(1, Math.round(endPosition - startPosition)));
   const others = clip.notes.filter((n) => !(n.pitch === pitch && n.start === start));
-  setNotes(target, [...others, { id: newNoteId(), pitch, start, length, velocity }]);
+  setNotes(target, [...others, { id: newNoteId(), pitch, start, length: noteLength, velocity }]);
 }

@@ -19,6 +19,8 @@ function ampAdsr(p: Params): Adsr {
 class FmVoice {
   readonly pitch: number;
   released = false;
+  // When the voice will have stopped sounding (Infinity while held).
+  endTime = Infinity;
   private carrier: OscillatorNode;
   private modulator: OscillatorNode;
   private nodes: AudioNode[];
@@ -26,7 +28,7 @@ class FmVoice {
   private ampEnv: Envelope;
 
   constructor(
-    ctx: AudioContext,
+    ctx: BaseAudioContext,
     dest: AudioNode,
     pitch: number,
     velocity: number,
@@ -77,6 +79,7 @@ class FmVoice {
   }
 
   private stopAt(time: number) {
+    this.endTime = time;
     this.carrier.stop(time);
     this.modulator.stop(time);
   }
@@ -87,7 +90,7 @@ export class FmSynthModule extends NoteInstrument {
   private voices: FmVoice[] = [];
   private params: Params = {};
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     super(ctx);
     this.output = ctx.createGain();
   }
@@ -98,6 +101,7 @@ export class FmSynthModule extends NoteInstrument {
   }
 
   noteOn(pitch: number, velocity: number, time: number) {
+    this.voices = this.voices.filter((v) => v.endTime > time);
     if (this.voices.length >= MAX_VOICES) {
       const victim = this.voices.find((v) => v.released) ?? this.voices[0];
       this.voices.splice(this.voices.indexOf(victim), 1);

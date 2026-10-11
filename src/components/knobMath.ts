@@ -57,3 +57,14 @@ export function followPointer(d: KnobDrag, x: number, y: number, fine: boolean):
   d.t = next;
   return next;
 }
+
+// Value <-> 0..1 knob position (log scaling for frequencies and times).
+export function toNorm(value: number, min: number, max: number, log: boolean): number {
+  const t = log ? Math.log(value / min) / Math.log(max / min) : (value - min) / (max - min);
+  return Math.min(1, Math.max(0, t));
+}
+
+export function fromNorm(t: number, min: number, max: number, log: boolean): number {
+  const c = Math.min(1, Math.max(0, t));
+  return log ? min * Math.pow(max / min, c) : min + c * (max - min);
+}

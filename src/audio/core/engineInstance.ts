@@ -1,4 +1,4 @@
-import { useProjectStore, useTransportStore } from '../../state/projectStore';
+import { pickProjectData, useProjectStore, useTransportStore } from '../../state/projectStore';
 import { AudioEngine } from './AudioEngine';
 import { defaultParams, getNodeDefinition } from './nodeRegistry';
 
@@ -11,6 +11,7 @@ declare global {
       project: typeof useProjectStore;
       transport: typeof useTransportStore;
       registry: { getNodeDefinition: typeof getNodeDefinition; defaultParams: typeof defaultParams };
+      renderProject?: (bars: number) => Promise<AudioBuffer>;
     };
   }
 }
@@ -39,4 +40,11 @@ if (import.meta.env.DEV) {
     transport: useTransportStore,
     registry: { getNodeDefinition, defaultParams },
   };
+  // Loaded lazily so the debug hook doesn't pull export code into startup.
+  void import('../../io/wavExport').then(({ renderProject }) => {
+    if (window.__cheeky) {
+      window.__cheeky.renderProject = (bars) =>
+        renderProject(pickProjectData(useProjectStore.getState()), bars, engine.ctx.sampleRate);
+    }
+  });
 }

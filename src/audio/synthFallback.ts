@@ -25,7 +25,7 @@ interface ToneOptions {
   gain?: number;
 }
 
-function playTone(ctx: AudioContext, dest: AudioNode, time: number, opts: ToneOptions) {
+function playTone(ctx: BaseAudioContext, dest: AudioNode, time: number, opts: ToneOptions) {
   const { startFreq, endFreq = startFreq, duration, type = 'sine', gain = 1 } = opts;
   const osc = ctx.createOscillator();
   const env = ctx.createGain();
@@ -47,7 +47,7 @@ interface NoiseOptions {
   gain?: number;
 }
 
-function playNoise(ctx: AudioContext, dest: AudioNode, time: number, opts: NoiseOptions) {
+function playNoise(ctx: BaseAudioContext, dest: AudioNode, time: number, opts: NoiseOptions) {
   const { duration, filterType = 'bandpass', frequency = 1000, Q = 1, gain = 1 } = opts;
   const src = ctx.createBufferSource();
   src.buffer = getNoiseBuffer(ctx);
@@ -63,7 +63,7 @@ function playNoise(ctx: AudioContext, dest: AudioNode, time: number, opts: Noise
   src.stop(time + duration + 0.02);
 }
 
-type Voice = (ctx: AudioContext, dest: AudioNode, time: number) => void;
+type Voice = (ctx: BaseAudioContext, dest: AudioNode, time: number) => void;
 
 export const SYNTH_FALLBACKS: Record<string, Voice> = {
   bd: (ctx, dest, time) => {
@@ -107,6 +107,6 @@ export const SYNTH_FALLBACKS: Record<string, Voice> = {
   },
 };
 
-export function playSynthFallback(trackId: string, ctx: AudioContext, dest: AudioNode, time: number) {
+export function playSynthFallback(trackId: string, ctx: BaseAudioContext, dest: AudioNode, time: number) {
   SYNTH_FALLBACKS[trackId]?.(ctx, dest, time);
 }

@@ -11,9 +11,17 @@ import {
 } from '@xyflow/react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { CLIP_LENGTHS, normalizeNotes } from '../audio/clips';
+import { CLIP_LENGTHS, newNoteId, normalizeNotes } from '../audio/clips';
 import { defaultParams, getNodeDefinition } from '../audio/core/nodeRegistry';
-import { OUTPUT_HANDLE, inputHandleId, type Clip, type Note, type ParamValue, type Params } from '../audio/core/types';
+import {
+  OUTPUT_HANDLE,
+  inputHandleId,
+  type Clip,
+  type MidiMapping,
+  type Note,
+  type ParamValue,
+  type Params,
+} from '../audio/core/types';
 import { STEP_COUNT } from '../audio/tracks';
 
 export type SynthNodeData = { name: string; params: Params };
@@ -36,6 +44,7 @@ export interface ProjectData {
   openTabs: string[];
   activeTab: string;
   viewport: Viewport | null;
+  midiMappings: MidiMapping[];
 }
 
 interface ProjectActions {
@@ -51,9 +60,14 @@ interface ProjectActions {
   updateParams: (nodeId: string, patch: Record<string, ParamValue>) => void;
   renameNode: (nodeId: string, name: string) => void;
   toggleDrumStep: (nodeId: string, trackId: string, step: number) => void;
+  setDrumStep: (nodeId: string, trackId: string, step: number, on: boolean) => void;
   // Replaces a note clip's notes (normalised to fit the clip).
   setNotes: (nodeId: string, notes: Note[]) => void;
   setClipLength: (nodeId: string, length: number) => void;
+  // Swaps in a whole clip (library, .mid import, shared link) if it suits the node.
+  replaceClip: (nodeId: string, clip: Clip) => boolean;
+  setMidiMapping: (mapping: MidiMapping) => void;
+  removeMidiMapping: (nodeId: string, param: string) => void;
   clearClip: (nodeId: string) => void;
   clearAllClips: () => void;
   setBpm: (bpm: number) => void;
@@ -100,6 +114,7 @@ function createDefaultProject(): ProjectData {
     openTabs: [],
     activeTab: GRAPH_TAB,
     viewport: null,
+    midiMappings: [],
   };
 }
 
@@ -145,7 +160,20 @@ export function pickProjectData(state: ProjectData): ProjectData {
     openTabs: state.openTabs,
     activeTab: state.activeTab,
     viewport: state.viewport,
+    midiMappings: state.midiMappings,
   };
+}
+
+// Deep copy with fresh note ids, so one clip can be loaded into several nodes.
+function cloneClip(clip: Clip): Clip {
+  if (clip.kind === 'notes') {
+    return { ...clip, notes: normalizeNotes(clip.notes.map((n) => ({ ...n, id: newNoteId() })), clip.length) };
+  }
+  const pattern: Record<string, boolean[]> = {};
+  for (const [track, steps] of Object.entries(clip.pattern)) {
+    pattern[track] = Array.from({ length: STEP_COUNT }, (_, i) => steps[i] === true);
+  }
+  return { kind: 'drum', pattern };
 }
 
 export const useProjectStore = create<ProjectState>()(
@@ -167,6 +195,7 @@ export const useProjectStore = create<ProjectState>()(
             openTabs,
             edges: state.edges.filter((e) => !removed.has(e.source) && !removed.has(e.target)),
             activeTab: removed.has(state.activeTab) ? GRAPH_TAB : state.activeTab,
+            midiMappings: state.midiMappings.filter((m) => !removed.has(m.nodeId)),
           };
         });
       },
@@ -244,6 +273,41 @@ export const useProjectStore = create<ProjectState>()(
           track[step] = !track[step];
           return { clips: { ...state.clips, [nodeId]: { ...clip, pattern: { ...clip.pattern, [trackId]: track } } } };
         }),
+
+      setDrumStep: (nodeId, trackId, step, on) =>
+        set((state) => {
+          const clip = state.clips[nodeId];
+          if (clip?.kind !== 'drum' || step < 0 || step >= STEP_COUNT) return {};
+          const track = [...(clip.pattern[trackId] ?? new Array(STEP_COUNT).fill(false))];
+          if (track[step] === on) return {};
+          track[step] = on;
+          return { clips: { ...state.clips, [nodeId]: { ...clip, pattern: { ...clip.pattern, [trackId]: track } } } };
+        }),
+
+      replaceClip: (nodeId, clip) => {
+        const current = get().clips[nodeId];
+        if (!current || current.kind !== clip.kind) return false;
+        set((state) => ({ clips: { ...state.clips, [nodeId]: cloneClip(clip) } }));
+        return true;
+      },
+
+      setMidiMapping: (mapping) =>
+        set((state) => ({
+          // One param per controller knob, and one controller knob per param.
+          midiMappings: [
+            ...state.midiMappings.filter(
+              (m) =>
+                !(m.channel === mapping.channel && m.cc === mapping.cc) &&
+                !(m.nodeId === mapping.nodeId && m.param === mapping.param),
+            ),
+            mapping,
+          ],
+        })),
+
+      removeMidiMapping: (nodeId, param) =>
+        set((state) => ({
+          midiMappings: state.midiMappings.filter((m) => !(m.nodeId === nodeId && m.param === param)),
+        })),
 
       setNotes: (nodeId, notes) =>
         set((state) => {

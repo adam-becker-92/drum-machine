@@ -8,9 +8,9 @@ function disconnectAll(nodes: AudioNode[]) {
 export class FilterModule implements AudioModule {
   readonly inputs: AudioNode[];
   readonly output: BiquadFilterNode;
-  private ctx: AudioContext;
+  private ctx: BaseAudioContext;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     this.ctx = ctx;
     this.output = ctx.createBiquadFilter();
     this.inputs = [this.output];
@@ -31,12 +31,12 @@ export class FilterModule implements AudioModule {
 abstract class WetDryModule implements AudioModule {
   readonly inputs: AudioNode[];
   readonly output: GainNode;
-  protected ctx: AudioContext;
+  protected ctx: BaseAudioContext;
   protected input: GainNode;
   protected dry: GainNode;
   protected wet: GainNode;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     this.ctx = ctx;
     this.input = ctx.createGain();
     this.dry = ctx.createGain();
@@ -63,7 +63,7 @@ abstract class WetDryModule implements AudioModule {
 export class ReverbModule extends WetDryModule {
   private reverb: ReverbUnit;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     super(ctx);
     this.reverb = new ReverbUnit(ctx);
     this.input.connect(this.reverb.input);
@@ -86,7 +86,7 @@ export class DelayModule extends WetDryModule {
   private params: Params = {};
   private bpm = 120;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     super(ctx);
     this.delay = new DelayUnit(ctx);
     this.input.connect(this.delay.input);
@@ -120,7 +120,7 @@ export class DistortionModule extends WetDryModule {
   private tone: BiquadFilterNode;
   private trim: GainNode;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     super(ctx);
     this.shaper = ctx.createWaveShaper();
     this.shaper.oversample = '4x';
@@ -149,9 +149,9 @@ export class CompressorModule implements AudioModule {
   readonly inputs: AudioNode[];
   readonly output: GainNode;
   private comp: DynamicsCompressorNode;
-  private ctx: AudioContext;
+  private ctx: BaseAudioContext;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     this.ctx = ctx;
     this.comp = ctx.createDynamicsCompressor();
     this.output = ctx.createGain();
@@ -176,9 +176,9 @@ export class GainPanModule implements AudioModule {
   readonly inputs: AudioNode[];
   readonly output: StereoPannerNode;
   private gain: GainNode;
-  private ctx: AudioContext;
+  private ctx: BaseAudioContext;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     this.ctx = ctx;
     this.gain = ctx.createGain();
     this.output = ctx.createStereoPanner();
@@ -201,9 +201,9 @@ export const MIXER_CHANNELS = 4;
 export class MixerModule implements AudioModule {
   readonly inputs: GainNode[];
   readonly output: GainNode;
-  private ctx: AudioContext;
+  private ctx: BaseAudioContext;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     this.ctx = ctx;
     this.output = ctx.createGain();
     this.inputs = Array.from({ length: MIXER_CHANNELS }, () => {
@@ -233,9 +233,9 @@ export class OutputModule implements AudioModule {
   private limiter: DynamicsCompressorNode;
   private post: GainNode;
   private limiting: boolean | null = null;
-  private ctx: AudioContext;
+  private ctx: BaseAudioContext;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     this.ctx = ctx;
     this.gain = ctx.createGain();
     this.limiter = ctx.createDynamicsCompressor();

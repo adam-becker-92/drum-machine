@@ -1,5 +1,5 @@
 import { DELAY_DIVISIONS } from '../dsp';
-import { DrumMachineModule, defaultVoiceParams, starterPattern } from '../modules/drumMachine';
+import { DrumMachineModule, defaultVoiceParams, starterPattern, voiceSpecForKey } from '../modules/drumMachine';
 import {
   CompressorModule,
   DelayModule,
@@ -12,7 +12,20 @@ import {
   ReverbModule,
 } from '../modules/effects';
 import { INSTRUMENT_DEFINITIONS } from './instrumentDefinitions';
-import type { NodeCategory, NodeDefinition, Params } from './types';
+import type { AudioModule, NodeCategory, NodeDefinition, ParamSpec, Params } from './types';
+
+// Nodes that make no sound of their own (MIDI In routes events, not audio).
+class NullModule implements AudioModule {
+  readonly inputs: AudioNode[] = [];
+  readonly output = null;
+  setParams() {}
+  dispose() {}
+}
+
+const MIDI_CHANNELS = [
+  { value: 'omni', label: 'All' },
+  ...Array.from({ length: 16 }, (_, i) => ({ value: String(i + 1), label: `Ch ${i + 1}` })),
+];
 
 const FILTER_TYPES = [
   { value: 'lowpass', label: 'LP' },
@@ -31,6 +44,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     color: '#e8a33d',
     inputs: [],
     hasOutput: true,
+    playable: true,
     params: [
       { key: 'volume', label: 'Volume', kind: 'number', min: 0, max: 1.5, default: 1 },
       { key: 'reverbSize', label: 'Verb Size', kind: 'number', min: 0.2, max: 6, default: 1.8, unit: 's', scale: 'log' },
@@ -45,6 +59,24 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     create: (ctx) => new DrumMachineModule(ctx),
   },
   ...INSTRUMENT_DEFINITIONS,
+  {
+    type: 'midiIn',
+    label: 'MIDI In',
+    category: 'control',
+    description:
+      'Notes from your MIDI keyboard or pads. Cable its Notes output into instruments or the drum machine; with nothing cabled, MIDI plays whichever instrument tab is open.',
+    icon: '🎛',
+    color: '#c3e88d',
+    inputs: [],
+    hasOutput: false,
+    noteOutput: true,
+    params: [
+      { key: 'channel', label: 'Channel', kind: 'select', options: MIDI_CHANNELS, default: 'omni' },
+      { key: 'transpose', label: 'Transpose', kind: 'number', min: -24, max: 24, step: 1, default: 0, unit: 'st' },
+    ],
+    inlineParams: ['channel', 'transpose'],
+    create: () => new NullModule(),
+  },
   {
     type: 'filter',
     label: 'Filter',
@@ -204,8 +236,15 @@ export function defaultParams(def: NodeDefinition): Params {
   return { ...params, ...def.extraDefaults?.() };
 }
 
+// The spec for any param key of a node type, including drum voice keys (v.sd.cutoff).
+export function findParamSpec(type: string | undefined, key: string): ParamSpec | undefined {
+  const def = getNodeDefinition(type);
+  return def?.params.find((p) => p.key === key) ?? (type === 'drumMachine' ? voiceSpecForKey(key) : undefined);
+}
+
 export const CATEGORY_LABELS: Record<NodeCategory, string> = {
   source: 'Sources',
+  control: 'Control',
   effect: 'Effects',
   utility: 'Utility',
   output: 'Output',

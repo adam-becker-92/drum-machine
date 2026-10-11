@@ -4,7 +4,7 @@ import type { NodeCategory } from '../../audio/core/types';
 import { useProjectStore } from '../../state/projectStore';
 import { NODE_DRAG_MIME, beginPaletteDrag, endPaletteDrag } from './paletteDrag';
 
-const CATEGORIES: NodeCategory[] = ['source', 'effect', 'utility', 'output'];
+const CATEGORIES: NodeCategory[] = ['source', 'control', 'effect', 'utility', 'output'];
 
 interface NodeMenuProps {
   onPick: (type: string) => void;

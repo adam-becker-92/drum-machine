@@ -13,12 +13,14 @@ function ampAdsr(p: Params): Adsr {
 class SamplerVoice {
   readonly pitch: number;
   released = false;
+  // When the voice will have stopped sounding (Infinity while held).
+  endTime = Infinity;
   private source: AudioBufferSourceNode;
   private amp: GainNode;
   private env: Envelope;
 
   constructor(
-    ctx: AudioContext,
+    ctx: BaseAudioContext,
     dest: AudioNode,
     buffer: AudioBuffer,
     pitch: number,
@@ -53,13 +55,15 @@ class SamplerVoice {
   release(time: number) {
     if (this.released) return;
     this.released = true;
-    this.source.stop(this.env.release(time));
+    this.endTime = this.env.release(time);
+    this.source.stop(this.endTime);
   }
 
   kill(time: number) {
     this.released = true;
     this.env.release(time, 0.006);
-    this.source.stop(time + 0.03);
+    this.endTime = time + 0.03;
+    this.source.stop(this.endTime);
   }
 }
 
@@ -72,8 +76,9 @@ export class SamplerModule extends NoteInstrument {
   private params: Params = {};
   private buffer: AudioBuffer | null = null;
   private sampleId: string | null = null;
+  private loading: Promise<void> = Promise.resolve();
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     super(ctx);
     this.filter = ctx.createBiquadFilter();
     this.filter.type = 'lowpass';
@@ -88,7 +93,7 @@ export class SamplerModule extends NoteInstrument {
       this.sampleId = id;
       this.buffer = null;
       if (id) {
-        void loadSampleBuffer(this.ctx, id).then((buffer) => {
+        this.loading = loadSampleBuffer(this.ctx, id).then((buffer) => {
           if (this.sampleId === id) this.buffer = buffer;
         });
       }
@@ -98,8 +103,13 @@ export class SamplerModule extends NoteInstrument {
     setSmooth(this.output.gain, num(p.volume, 0.8), this.ctx);
   }
 
+  whenReady(): Promise<void> {
+    return this.loading;
+  }
+
   noteOn(pitch: number, velocity: number, time: number) {
     if (!this.buffer) return;
+    this.voices = this.voices.filter((v) => v.endTime > time);
     if (this.voices.length >= MAX_VOICES) {
       const victim = this.voices.find((v) => v.released) ?? this.voices[0];
       this.voices.splice(this.voices.indexOf(victim), 1);

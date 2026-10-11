@@ -2,7 +2,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { CSSProperties } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { getNodeDefinition } from '../../audio/core/nodeRegistry';
-import { OUTPUT_HANDLE, inputHandleId } from '../../audio/core/types';
+import { NOTES_IN_HANDLE, NOTES_OUT_HANDLE, OUTPUT_HANDLE, inputHandleId } from '../../audio/core/types';
 import { STEP_COUNT, TRACKS } from '../../audio/tracks';
 import { useProjectStore, useTransportStore, type SynthNode } from '../../state/projectStore';
 import { ParamControl } from '../ParamControl';
@@ -68,7 +68,14 @@ export function SynthNodeView({ id, type, data, selected }: NodeProps<SynthNode>
   // The most recently plugged cable on an input is the one a drag picks up.
   const cableAt = (handle: string) => incoming.findLast((e) => e.targetHandle === handle);
 
-  const rows = Math.max(def.inputs.length, def.hasOutput ? 1 : 0);
+  // Audio ports, plus note (MIDI) ports drawn as diamonds.
+  const inputs = def.inputs.map((label, i) => ({ id: inputHandleId(i), label, note: false }));
+  if (def.playable) inputs.push({ id: NOTES_IN_HANDLE, label: 'Notes', note: true });
+  const outputs = [
+    ...(def.hasOutput ? [{ id: OUTPUT_HANDLE, label: 'Out', note: false }] : []),
+    ...(def.noteOutput ? [{ id: NOTES_OUT_HANDLE, label: 'Notes', note: true }] : []),
+  ];
+  const rows = Math.max(inputs.length, outputs.length);
   const inlineSpecs = def.inlineParams
     .map((key) => def.params.find((p) => p.key === key))
     .filter((spec) => spec !== undefined);
@@ -95,28 +102,35 @@ export function SynthNodeView({ id, type, data, selected }: NodeProps<SynthNode>
 
       <div className="synth-node-ports">
         {Array.from({ length: rows }, (_, i) => {
-          const cable = cableAt(inputHandleId(i));
+          const input = inputs[i];
+          const output = outputs[i];
+          const cable = input && cableAt(input.id);
           return (
             <div className="port-row" key={i}>
-              {def.inputs[i] !== undefined && (
+              {input && (
                 <>
                   <Handle
                     type="target"
                     position={Position.Left}
-                    id={inputHandleId(i)}
-                    className={`port port-in ${cable ? 'plugged' : ''}`}
+                    id={input.id}
+                    className={`port port-in ${input.note ? 'note-port' : ''} ${cable ? 'plugged' : ''}`}
                     isConnectableStart={!cable}
                     onMouseDown={cable ? (e) => pickUpCable(e, cable) : undefined}
                     onTouchStart={cable ? (e) => pickUpCable(e, cable) : undefined}
-                    title={cable ? 'Drag to unplug or re-route this cable' : undefined}
+                    title={cable ? 'Drag to unplug or re-route; right-click to unhook' : undefined}
                   />
-                  <span className="port-label in">{def.inputs[i]}</span>
+                  <span className="port-label in">{input.label}</span>
                 </>
               )}
-              {i === 0 && def.hasOutput && (
+              {output && (
                 <>
-                  <span className="port-label out">Out</span>
-                  <Handle type="source" position={Position.Right} id={OUTPUT_HANDLE} className="port port-out" />
+                  <span className="port-label out">{output.label}</span>
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={output.id}
+                    className={`port port-out ${output.note ? 'note-port' : ''}`}
+                  />
                 </>
               )}
             </div>
@@ -142,6 +156,7 @@ export function SynthNodeView({ id, type, data, selected }: NodeProps<SynthNode>
               onChange={(v) => updateParams(id, { [spec.key]: v })}
               size={32}
               color={def.color}
+              nodeId={id}
             />
           ))}
         </div>

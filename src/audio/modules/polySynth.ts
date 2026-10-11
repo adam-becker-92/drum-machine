@@ -34,7 +34,9 @@ function filterAdsr(p: Params): Adsr {
 class PolyVoice {
   readonly pitch: number;
   released = false;
-  private ctx: AudioContext;
+  // When the voice will have stopped sounding (Infinity while held).
+  endTime = Infinity;
+  private ctx: BaseAudioContext;
   private osc1: OscillatorNode;
   private osc2: OscillatorNode;
   private noise: AudioBufferSourceNode;
@@ -46,7 +48,7 @@ class PolyVoice {
   private lfoFilter: AudioNode;
 
   constructor(
-    ctx: AudioContext,
+    ctx: BaseAudioContext,
     dest: AudioNode,
     lfoPitch: AudioNode,
     lfoFilter: AudioNode,
@@ -134,6 +136,7 @@ class PolyVoice {
   }
 
   private stopAt(time: number) {
+    this.endTime = time;
     for (const src of [this.osc1, this.osc2, this.noise]) src.stop(time);
   }
 }
@@ -146,7 +149,7 @@ export class PolySynthModule extends NoteInstrument {
   private lfoPitch: GainNode;
   private lfoFilter: GainNode;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     super(ctx);
     this.output = ctx.createGain();
     this.lfo = ctx.createOscillator();
@@ -171,6 +174,9 @@ export class PolySynthModule extends NoteInstrument {
   }
 
   noteOn(pitch: number, velocity: number, time: number) {
+    // Voices that will have finished by then don't count (matters when a whole
+    // song is scheduled up front for an offline render).
+    this.voices = this.voices.filter((v) => v.endTime > time);
     if (this.voices.length >= MAX_VOICES) {
       const victim = this.voices.find((v) => v.released) ?? this.voices[0];
       this.voices.splice(this.voices.indexOf(victim), 1);

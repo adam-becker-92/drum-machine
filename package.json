@@ -10,8 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tonejs/midi": "^2.0.28",
     "@xyflow/react": "^12.12.0",
     "@xyflow/system": "0.0.83",
+    "lz-string": "^1.5.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zustand": "^5.0.15"

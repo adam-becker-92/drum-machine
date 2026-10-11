@@ -9,12 +9,12 @@ import type { AudioModule, Clip, NoteClip, Params } from '../core/types';
 export abstract class NoteInstrument implements AudioModule {
   readonly inputs: AudioNode[] = [];
   abstract readonly output: AudioNode;
-  protected ctx: AudioContext;
+  protected ctx: BaseAudioContext;
   protected bpm = 120;
   private clip: NoteClip = { kind: 'notes', length: 16, notes: [] };
   private pendingOffs: { step: number; pitch: number }[] = [];
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     this.ctx = ctx;
   }
 
@@ -50,8 +50,8 @@ export abstract class NoteInstrument implements AudioModule {
     }
   }
 
-  onStop() {
+  onStop(time = this.ctx.currentTime) {
     this.pendingOffs = [];
-    this.releaseAll(this.ctx.currentTime);
+    this.releaseAll(time);
   }
 }

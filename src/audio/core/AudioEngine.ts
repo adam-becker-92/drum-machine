@@ -3,7 +3,7 @@ import type { StoreApi, UseBoundStore } from 'zustand';
 import { useTransportStore, type ProjectState } from '../../state/projectStore';
 import { getNodeDefinition } from './nodeRegistry';
 import { Transport } from './Transport';
-import { inputIndexFromHandle, type AudioModule, type Clip, type Params } from './types';
+import { inputIndexFromHandle, isNoteHandle, type AudioModule, type Clip, type Params } from './types';
 
 interface ModuleEntry {
   module: AudioModule;
@@ -75,8 +75,9 @@ export class AudioEngine {
       }
     }
 
-    // 2. Disconnect edges that went away (while both ends still exist).
-    const nextEdges = new Map(state.edges.map((e) => [edgeKey(e), e]));
+    // 2. Disconnect edges that went away (while both ends still exist). Note
+    //    (MIDI) cables carry events, not audio, and are routed by midiInput.
+    const nextEdges = new Map(state.edges.filter((e) => !isNoteHandle(e.sourceHandle)).map((e) => [edgeKey(e), e]));
     for (const [key, edge] of this.edges) {
       if (!nextEdges.has(key)) {
         this.connect(edge, false);

@@ -21,7 +21,7 @@ export class BassSynthModule extends NoteInstrument {
   private params: Params = {};
   private held: number[] = [];
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     super(ctx);
     this.osc = ctx.createOscillator();
     this.filter1 = ctx.createBiquadFilter();

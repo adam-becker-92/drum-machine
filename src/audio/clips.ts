@@ -1,4 +1,4 @@
-import type { Note, NoteClip } from './core/types';
+import type { Clip, Note, NoteClip } from './core/types';
 
 export const CLIP_LENGTHS = [16, 32, 64];
 
@@ -26,4 +26,10 @@ export function normalizeNotes(notes: Note[], clipLength: number): Note[] {
       length: Math.min(clipLength - Math.round(n.start), Math.max(1, Math.round(n.length))),
       velocity: Math.min(1, Math.max(0.05, n.velocity)),
     }));
+}
+
+export function describeClip(clip: Clip): string {
+  if (clip.kind === 'notes') return `${clip.length / 16} bar${clip.length > 16 ? 's' : ''} · ${clip.notes.length} notes`;
+  const hits = Object.values(clip.pattern).reduce((n, steps) => n + steps.filter(Boolean).length, 0);
+  return `drums · ${hits} hits`;
 }

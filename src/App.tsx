@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import './App.css';
 import { engine } from './audio/core/engineInstance';
 import { NodeEditor } from './components/editors/NodeEditor';
 import { GraphView } from './components/graph/GraphView';
+import { MidiButton } from './components/header/MidiButton';
+import { ProjectMenu } from './components/header/ProjectMenu';
 import { TabBar } from './components/TabBar';
+import { Toast } from './components/Toast';
 import { Transport } from './components/Transport';
-import { UndoToast } from './components/UndoToast';
 import { useComputerKeyboard } from './components/useComputerKeyboard';
+import { cancelLearning, useMidiStore } from './state/midiInput';
 import {
   GRAPH_TAB,
   MAX_BPM,
@@ -16,6 +19,7 @@ import {
   useTransportStore,
   type ProjectData,
 } from './state/projectStore';
+import { showToast } from './state/toastStore';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   return (
@@ -32,13 +36,14 @@ function App() {
   const resetProject = useProjectStore((s) => s.resetProject);
   const loadProject = useProjectStore((s) => s.loadProject);
   const isPlaying = useTransportStore((s) => s.isPlaying);
-  const [undo, setUndo] = useState<{ message: string; snapshot: ProjectData } | null>(null);
+  const learning = useMidiStore((s) => s.learning);
   // Bumped when the whole project is swapped so the graph re-reads (or re-fits) its view.
   const [graphKey, setGraphKey] = useState(0);
   useComputerKeyboard();
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && useMidiStore.getState().learning) cancelLearning();
       if (e.code !== 'Space' || e.repeat || isTypingTarget(e.target)) return;
       e.preventDefault();
       engine.togglePlay();
@@ -50,7 +55,13 @@ function App() {
   const withUndo = (message: string, action: () => void) => {
     const snapshot = pickProjectData(useProjectStore.getState());
     action();
-    setUndo({ message, snapshot });
+    showToast(message, {
+      label: 'Undo',
+      run: () => {
+        loadProject(snapshot);
+        setGraphKey((k) => k + 1);
+      },
+    });
   };
 
   // Wipes every pattern but keeps playing, so you can rebuild a groove live.
@@ -63,7 +74,12 @@ function App() {
       setGraphKey((k) => k + 1);
     });
 
-  const dismissUndo = useCallback(() => setUndo(null), []);
+  const onReplaceProject = (message: string, data: ProjectData) =>
+    withUndo(message, () => {
+      engine.stop();
+      loadProject(data);
+      setGraphKey((k) => k + 1);
+    });
 
   return (
     <div className="app">
@@ -82,6 +98,8 @@ function App() {
           onBpmChange={setBpm}
           onClear={onClear}
         />
+        <MidiButton />
+        <ProjectMenu onReplaceProject={onReplaceProject} />
         <button
           type="button"
           className="ghost-button"
@@ -102,17 +120,12 @@ function App() {
         )}
       </main>
 
-      {undo && (
-        <UndoToast
-          message={undo.message}
-          onUndo={() => {
-            loadProject(undo.snapshot);
-            setGraphKey((k) => k + 1);
-            setUndo(null);
-          }}
-          onDismiss={dismissUndo}
-        />
+      {learning && (
+        <div className="learn-banner" role="status">
+          MIDI learn: move a knob or slider on your controller… <kbd>Esc</kbd> to cancel
+        </div>
       )}
+      <Toast />
     </div>
   );
 }

@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { CLIP_LENGTHS } from '../../audio/clips';
-import { engine } from '../../audio/core/engineInstance';
 import { defaultParams, getNodeDefinition } from '../../audio/core/nodeRegistry';
 import type { NodeDefinition, Params } from '../../audio/core/types';
 import { str } from '../../audio/dsp';
-import { useLiveStore } from '../../state/liveInput';
 import { usePresetStore } from '../../state/presetStore';
-import { useProjectStore, useTransportStore, type SynthNode } from '../../state/projectStore';
+import { useProjectStore, type SynthNode } from '../../state/projectStore';
 import { KeyboardStrip } from '../KeyboardStrip';
 import { ParamGroups } from '../ParamControl';
 import { PianoRoll } from '../PianoRoll';
+import { ClipTools, RecButton } from './ClipTools';
 import { SamplePanel } from './SamplePanel';
 
 const NO_PRESET: never[] = [];
@@ -115,14 +114,6 @@ export function InstrumentEditor({ node }: { node: SynthNode }) {
   const updateParams = useProjectStore((s) => s.updateParams);
   const setClipLength = useProjectStore((s) => s.setClipLength);
   const clearClip = useProjectStore((s) => s.clearClip);
-  const recordArmed = useLiveStore((s) => s.recordArmed);
-  const isPlaying = useTransportStore((s) => s.isPlaying);
-
-  const toggleRecord = () => {
-    const armed = !recordArmed;
-    useLiveStore.setState({ recordArmed: armed });
-    if (armed && !isPlaying) void engine.play();
-  };
 
   return (
     <div className="instrument-editor">
@@ -137,6 +128,7 @@ export function InstrumentEditor({ node }: { node: SynthNode }) {
           onChange={(key, value) => updateParams(node.id, { [key]: value })}
           size={46}
           color={def.color}
+          nodeId={node.id}
         />
       </section>
 
@@ -158,15 +150,8 @@ export function InstrumentEditor({ node }: { node: SynthNode }) {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              className={`ghost-button rec-button ${recordArmed ? 'armed' : ''}`}
-              aria-pressed={recordArmed}
-              onClick={toggleRecord}
-              title="Record what you play into this clip (overdub)"
-            >
-              ● Rec
-            </button>
+            <RecButton />
+            <ClipTools node={node} />
             <button type="button" className="ghost-button" onClick={() => clearClip(node.id)}>
               Clear
             </button>

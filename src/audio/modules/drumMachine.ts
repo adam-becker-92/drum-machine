@@ -1,9 +1,10 @@
 import { DelayUnit, ReverbUnit, divisionSeconds, driveCurve, num, setSmooth, str } from '../dsp';
+import { loadSampleBuffer } from '../sampleLibrary';
 import { loadSample } from '../sampleLoader';
 import { playSynthFallback } from '../synthFallback';
-import { STEP_COUNT, TRACKS } from '../tracks';
+import { STEP_COUNT, TRACKS, trackForDrumNote } from '../tracks';
 import type { Pattern } from '../types';
-import type { AudioModule, Clip, Params } from '../core/types';
+import type { AudioModule, Clip, ParamSpec, Params } from '../core/types';
 
 // Per-voice params live in the node's flat params map as `v.<trackId>.<field>`.
 export const VOICE_FIELDS = {
@@ -16,9 +17,40 @@ export const VOICE_FIELDS = {
   reverb: 0,
   delay: 0,
   mute: false,
+  // A user sample (sample library id) replacing the built-in sound; '' = built-in.
+  sample: '',
+  sampleName: '',
 } as const;
 
 export type VoiceField = keyof typeof VOICE_FIELDS;
+
+// Knob specs for the per-voice strip (keys are VoiceFields).
+export const VOICE_SPECS: (ParamSpec & { key: VoiceField })[] = [
+  { key: 'level', label: 'Level', kind: 'number', min: 0, max: 1.5, default: VOICE_FIELDS.level },
+  { key: 'pan', label: 'Pan', kind: 'number', min: -1, max: 1, default: VOICE_FIELDS.pan },
+  { key: 'drive', label: 'Drive', kind: 'number', min: 0, max: 1, default: VOICE_FIELDS.drive },
+  {
+    key: 'filterType',
+    label: 'Filter',
+    kind: 'select',
+    options: [
+      { value: 'lowpass', label: 'LP' },
+      { value: 'highpass', label: 'HP' },
+      { value: 'bandpass', label: 'BP' },
+    ],
+    default: VOICE_FIELDS.filterType,
+  },
+  { key: 'cutoff', label: 'Cutoff', kind: 'number', min: 20, max: 20000, default: VOICE_FIELDS.cutoff, unit: 'Hz', scale: 'log' },
+  { key: 'resonance', label: 'Res', kind: 'number', min: 0, max: 20, default: VOICE_FIELDS.resonance },
+  { key: 'reverb', label: 'Reverb', kind: 'number', min: 0, max: 1, default: VOICE_FIELDS.reverb },
+  { key: 'delay', label: 'Delay', kind: 'number', min: 0, max: 1, default: VOICE_FIELDS.delay },
+];
+
+// The spec behind a `v.<track>.<field>` param key (for MIDI mapping).
+export function voiceSpecForKey(key: string): ParamSpec | undefined {
+  const field = /^v\.[a-z]+\.(\w+)$/.exec(key)?.[1];
+  return VOICE_SPECS.find((spec) => spec.key === field);
+}
 
 export function voiceKey(trackId: string, field: VoiceField): string {
   return `v.${trackId}.${field}`;
@@ -56,9 +88,9 @@ class VoiceStrip {
   private reverbSend: GainNode;
   private delaySend: GainNode;
   muted = false;
-  private ctx: AudioContext;
+  private ctx: BaseAudioContext;
 
-  constructor(ctx: AudioContext, bus: AudioNode, reverb: AudioNode, delay: AudioNode) {
+  constructor(ctx: BaseAudioContext, bus: AudioNode, reverb: AudioNode, delay: AudioNode) {
     this.ctx = ctx;
     this.input = ctx.createGain();
     this.shaper = ctx.createWaveShaper();
@@ -102,8 +134,11 @@ class VoiceStrip {
 export class DrumMachineModule implements AudioModule {
   readonly inputs: AudioNode[] = [];
   readonly output: GainNode;
-  private ctx: AudioContext;
+  private ctx: BaseAudioContext;
   private buffers = new Map<string, AudioBuffer | null>();
+  // Per-voice user samples, by track: the library id and its decoded buffer.
+  private custom = new Map<string, { id: string; buffer: AudioBuffer | null }>();
+  private loads: Promise<unknown>[] = [];
   private voices = new Map<string, VoiceStrip>();
   private reverb: ReverbUnit;
   private delay: DelayUnit;
@@ -111,7 +146,7 @@ export class DrumMachineModule implements AudioModule {
   private params: Params = {};
   private bpm = 120;
 
-  constructor(ctx: AudioContext) {
+  constructor(ctx: BaseAudioContext) {
     this.ctx = ctx;
     this.output = ctx.createGain();
     this.reverb = new ReverbUnit(ctx);
@@ -122,12 +157,31 @@ export class DrumMachineModule implements AudioModule {
       this.voices.set(track.id, new VoiceStrip(ctx, this.output, this.reverb.input, this.delay.input));
     }
     for (const track of TRACKS) {
-      loadSample(ctx, track.sampleFile).then((buffer) => this.buffers.set(track.id, buffer));
+      this.loads.push(loadSample(ctx, track.sampleFile).then((buffer) => this.buffers.set(track.id, buffer)));
+    }
+  }
+
+  whenReady(): Promise<void> {
+    return Promise.all(this.loads).then(() => undefined);
+  }
+
+  private applyCustomSamples(params: Params) {
+    for (const track of TRACKS) {
+      const id = str(params[voiceKey(track.id, 'sample')], '');
+      if (id === (this.custom.get(track.id)?.id ?? '')) continue;
+      if (!id) {
+        this.custom.delete(track.id);
+        continue;
+      }
+      const entry = { id, buffer: null as AudioBuffer | null };
+      this.custom.set(track.id, entry);
+      this.loads.push(loadSampleBuffer(this.ctx, id).then((buffer) => (entry.buffer = buffer)));
     }
   }
 
   setParams(params: Params) {
     this.params = params;
+    this.applyCustomSamples(params);
     for (const [trackId, voice] of this.voices) voice.apply(params, trackId);
     this.reverb.configure(num(params.reverbSize, 1.8), num(params.reverbDecay, 3));
     this.applyDelay();
@@ -158,18 +212,35 @@ export class DrumMachineModule implements AudioModule {
     }
   }
 
+  // Live hits from MIDI pads / keys, using the General MIDI drum map.
+  noteOn(pitch: number, velocity: number, time: number) {
+    const track = trackForDrumNote(pitch);
+    if (track) this.trigger(track, time, velocity);
+  }
+
+  noteOff() {
+    // Drum hits are one-shots.
+  }
+
   // Also used directly by the editor to audition a voice.
-  trigger(trackId: string, time = this.ctx.currentTime) {
+  trigger(trackId: string, time = this.ctx.currentTime, velocity = 1) {
     const voice = this.voices.get(trackId);
     if (!voice || voice.muted) return;
-    const buffer = this.buffers.get(trackId);
+    let dest: AudioNode = voice.input;
+    if (velocity < 1) {
+      const hit = this.ctx.createGain();
+      hit.gain.value = 0.25 + 0.75 * velocity;
+      hit.connect(voice.input);
+      dest = hit;
+    }
+    const buffer = this.custom.get(trackId)?.buffer ?? this.buffers.get(trackId);
     if (buffer) {
       const source = this.ctx.createBufferSource();
       source.buffer = buffer;
-      source.connect(voice.input);
+      source.connect(dest);
       source.start(time);
     } else {
-      playSynthFallback(trackId, this.ctx, voice.input, time);
+      playSynthFallback(trackId, this.ctx, dest, time);
     }
   }
 

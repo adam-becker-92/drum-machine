@@ -51,6 +51,7 @@ export function NodeEditor({ nodeId }: { nodeId: string }) {
             onChange={(key, value) => updateParams(node.id, { [key]: value })}
             size={72}
             color={def.color}
+            nodeId={node.id}
           />
         </section>
       )}
