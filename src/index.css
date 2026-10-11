@@ -1,6 +1,9 @@
 :root {
+  --bg: #0e0e0f;
+  --canvas: #141417;
   --panel: #1c1c1e;
   --panel-light: #2a2a2d;
+  --border: #303034;
   --text: #e8e6e1;
   --text-dim: #9a988f;
   --amber: #e8a33d;
@@ -13,7 +16,7 @@
 
   color-scheme: dark;
   color: var(--text);
-  background: #0e0e0f;
+  background: var(--bg);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
@@ -24,8 +27,14 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  padding: 32px 16px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+}
+
+button {
+  font: inherit;
 }
