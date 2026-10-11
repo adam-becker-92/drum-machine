@@ -135,3 +135,97 @@ export function mixGains(mix: number): { dry: number; wet: number } {
   const m = Math.min(1, Math.max(0, mix));
   return { dry: Math.cos((m * Math.PI) / 2), wet: Math.sin((m * Math.PI) / 2) };
 }
+
+export function midiToFreq(pitch: number): number {
+  return 440 * Math.pow(2, (pitch - 69) / 12);
+}
+
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+export function noteName(pitch: number): string {
+  return `${NOTE_NAMES[((pitch % 12) + 12) % 12]}${Math.floor(pitch / 12) - 1}`;
+}
+
+export interface Adsr {
+  attack: number;
+  decay: number;
+  sustain: number; // 0..1 of the way from base to peak
+  release: number;
+}
+
+const MIN_TIME = 0.002;
+
+// Drives one AudioParam through attack -> decay -> sustain, and releases from
+// wherever the curve really is at release time. Releases are often scheduled
+// ahead (clip note-offs), possibly mid-attack, so the envelope keeps an
+// analytic model of its own curve instead of reading param.value.
+export class Envelope {
+  private param: AudioParam;
+  private base = 0;
+  private peak = 1;
+  private startValue = 0;
+  private start = -1;
+  private adsr: Adsr = { attack: MIN_TIME, decay: 0.1, sustain: 1, release: 0.1 };
+  private releaseAt = Infinity;
+  private releaseValue = 0;
+  private releaseTau = 0.03;
+
+  constructor(param: AudioParam, base = 0) {
+    this.param = param;
+    this.base = base;
+    this.startValue = base;
+    param.value = base;
+  }
+
+  private sustainLevel(): number {
+    return this.base + (this.peak - this.base) * this.adsr.sustain;
+  }
+
+  valueAt(t: number): number {
+    if (this.start < 0 || t <= this.start) return this.start < 0 ? this.base : this.startValue;
+    if (t >= this.releaseAt) {
+      return this.base + (this.releaseValue - this.base) * Math.exp(-(t - this.releaseAt) / this.releaseTau);
+    }
+    const attack = Math.max(MIN_TIME, this.adsr.attack);
+    if (t < this.start + attack) return this.startValue + (this.peak - this.startValue) * ((t - this.start) / attack);
+    const tau = Math.max(MIN_TIME, this.adsr.decay) / 3;
+    const s = this.sustainLevel();
+    return s + (this.peak - s) * Math.exp(-(t - this.start - attack) / tau);
+  }
+
+  // Starts from the current value, so retriggering a sounding mono voice doesn't click.
+  trigger(time: number, peak: number, adsr: Adsr) {
+    const from = this.valueAt(time);
+    this.startValue = from;
+    this.start = time;
+    this.peak = peak;
+    this.adsr = adsr;
+    this.releaseAt = Infinity;
+    const attack = Math.max(MIN_TIME, adsr.attack);
+    const p = this.param;
+    p.cancelScheduledValues(time);
+    p.setValueAtTime(from, time);
+    p.linearRampToValueAtTime(peak, time + attack);
+    p.setTargetAtTime(this.sustainLevel(), time + attack, Math.max(MIN_TIME, adsr.decay) / 3);
+  }
+
+  // Returns the time by which the release has effectively finished.
+  release(time: number, releaseTime = this.adsr.release): number {
+    if (this.start < 0) return time;
+    const value = this.valueAt(time);
+    const attack = Math.max(MIN_TIME, this.adsr.attack);
+    const p = this.param;
+    p.cancelScheduledValues(time);
+    if (time < this.start + attack) {
+      // Mid-attack: cancelling removed the attack ramp, so redraw it up to `time`.
+      p.linearRampToValueAtTime(value, time);
+    } else {
+      p.setValueAtTime(value, time);
+    }
+    this.releaseTau = Math.max(MIN_TIME, releaseTime) / 3;
+    p.setTargetAtTime(this.base, time, this.releaseTau);
+    this.releaseAt = time;
+    this.releaseValue = value;
+    return time + this.releaseTau * 6;
+  }
+}

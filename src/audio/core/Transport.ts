@@ -34,8 +34,14 @@ export class Transport {
     this.bpm = bpm;
   }
 
-  private secondsPerStep(): number {
+  secondsPerStep(): number {
     return 60 / this.bpm / 4; // 16th notes
+  }
+
+  // Fractional step count (since play) at an AudioContext time; used to place
+  // live-recorded notes. Only meaningful while running.
+  positionAt(time: number): number {
+    return this.currentStep - (this.nextStepTime - time) / this.secondsPerStep();
   }
 
   private scheduler = () => {

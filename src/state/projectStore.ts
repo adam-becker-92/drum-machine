@@ -11,8 +11,9 @@ import {
 } from '@xyflow/react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { CLIP_LENGTHS, normalizeNotes } from '../audio/clips';
 import { defaultParams, getNodeDefinition } from '../audio/core/nodeRegistry';
-import { OUTPUT_HANDLE, inputHandleId, type Clip, type ParamValue, type Params } from '../audio/core/types';
+import { OUTPUT_HANDLE, inputHandleId, type Clip, type Note, type ParamValue, type Params } from '../audio/core/types';
 import { STEP_COUNT } from '../audio/tracks';
 
 export type SynthNodeData = { name: string; params: Params };
@@ -50,6 +51,9 @@ interface ProjectActions {
   updateParams: (nodeId: string, patch: Record<string, ParamValue>) => void;
   renameNode: (nodeId: string, name: string) => void;
   toggleDrumStep: (nodeId: string, trackId: string, step: number) => void;
+  // Replaces a note clip's notes (normalised to fit the clip).
+  setNotes: (nodeId: string, notes: Note[]) => void;
+  setClipLength: (nodeId: string, length: number) => void;
   clearClip: (nodeId: string) => void;
   clearAllClips: () => void;
   setBpm: (bpm: number) => void;
@@ -125,6 +129,7 @@ function uniqueName(nodes: SynthNode[], base: string): string {
 }
 
 function emptyClip(clip: Clip): Clip {
+  if (clip.kind === 'notes') return { ...clip, notes: [] };
   const pattern: Record<string, boolean[]> = {};
   for (const id of Object.keys(clip.pattern)) pattern[id] = new Array(STEP_COUNT).fill(false);
   return { ...clip, pattern };
@@ -238,6 +243,20 @@ export const useProjectStore = create<ProjectState>()(
           const track = [...(clip.pattern[trackId] ?? new Array(STEP_COUNT).fill(false))];
           track[step] = !track[step];
           return { clips: { ...state.clips, [nodeId]: { ...clip, pattern: { ...clip.pattern, [trackId]: track } } } };
+        }),
+
+      setNotes: (nodeId, notes) =>
+        set((state) => {
+          const clip = state.clips[nodeId];
+          if (clip?.kind !== 'notes') return {};
+          return { clips: { ...state.clips, [nodeId]: { ...clip, notes: normalizeNotes(notes, clip.length) } } };
+        }),
+
+      setClipLength: (nodeId, length) =>
+        set((state) => {
+          const clip = state.clips[nodeId];
+          if (clip?.kind !== 'notes' || !CLIP_LENGTHS.includes(length)) return {};
+          return { clips: { ...state.clips, [nodeId]: { ...clip, length, notes: normalizeNotes(clip.notes, length) } } };
         }),
 
       clearClip: (nodeId) =>

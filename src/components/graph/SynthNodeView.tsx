@@ -30,6 +30,33 @@ function DrumPreview({ nodeId }: { nodeId: string }) {
   );
 }
 
+// Thumbnail of a note clip with its playhead.
+function NotesPreview({ nodeId }: { nodeId: string }) {
+  const clip = useProjectStore((s) => s.clips[nodeId]);
+  const currentStep = useTransportStore((s) => s.currentStep);
+  if (clip?.kind !== 'notes') return null;
+  const pitches = clip.notes.map((n) => n.pitch);
+  const lo = pitches.length ? Math.min(...pitches) : 60;
+  const span = Math.max(12, (pitches.length ? Math.max(...pitches) : 72) - lo + 1);
+  const pct = (v: number) => `${v * 100}%`;
+  return (
+    <div className="notes-preview" aria-hidden>
+      {clip.notes.map((n) => (
+        <span
+          key={n.id}
+          style={{
+            left: pct(n.start / clip.length),
+            width: pct(n.length / clip.length),
+            top: pct((lo + span - 1 - n.pitch) / span),
+            height: pct(1 / span),
+          }}
+        />
+      ))}
+      {currentStep >= 0 && <i style={{ left: pct((currentStep % clip.length) / clip.length) }} />}
+    </div>
+  );
+}
+
 export function SynthNodeView({ id, type, data, selected }: NodeProps<SynthNode>) {
   const def = getNodeDefinition(type);
   const updateParams = useProjectStore((s) => s.updateParams);
@@ -98,6 +125,7 @@ export function SynthNodeView({ id, type, data, selected }: NodeProps<SynthNode>
       </div>
 
       {type === 'drumMachine' && <DrumPreview nodeId={id} />}
+      {def.playable && <NotesPreview nodeId={id} />}
       {type === 'master' && (
         <div className="synth-node-scope">
           <Scope nodeId={id} width={150} height={44} />

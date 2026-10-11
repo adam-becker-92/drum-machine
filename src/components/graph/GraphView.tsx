@@ -157,6 +157,10 @@ function GraphCanvas() {
           <li>Drop an effect onto a cable to splice it in.</li>
           <li>Drag a cable off an input to unplug it, or onto another input to re-route.</li>
           <li>Double-click a node to open its editor. Right-click the canvas for a quick menu.</li>
+          <li>
+            Select an instrument (or open its tab) and play it from your computer keyboard: <b>A</b>–<b>;</b>, octave{' '}
+            <b>Z</b>/<b>X</b>.
+          </li>
         </ul>
       </aside>
       <div

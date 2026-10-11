@@ -20,6 +20,7 @@ export function ParamControl({ spec, value, onChange, size, color }: ParamContro
         defaultValue={spec.default}
         scale={spec.scale}
         unit={spec.unit}
+        step={spec.step}
         size={size}
         color={color}
         onChange={onChange}
@@ -76,6 +77,25 @@ interface ParamPanelProps {
   onChange: (key: string, value: ParamValue) => void;
   size?: number;
   color?: string;
+}
+
+// Knobs laid out in labelled sections by each spec's `group`.
+export function ParamGroups({ specs, values, onChange, size = 48, color }: ParamPanelProps) {
+  const groups = new Map<string, ParamSpec[]>();
+  for (const spec of specs) {
+    const name = spec.group ?? 'Settings';
+    groups.set(name, [...(groups.get(name) ?? []), spec]);
+  }
+  return (
+    <div className="param-groups">
+      {[...groups].map(([name, groupSpecs]) => (
+        <section key={name} className="param-group">
+          <h4>{name}</h4>
+          <ParamPanel specs={groupSpecs} values={values} onChange={onChange} size={size} color={color} />
+        </section>
+      ))}
+    </div>
+  );
 }
 
 export function ParamPanel({ specs, values, onChange, size = 56, color }: ParamPanelProps) {

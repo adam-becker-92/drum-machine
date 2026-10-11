@@ -1,11 +1,17 @@
 import { useProjectStore, useTransportStore } from '../../state/projectStore';
 import { AudioEngine } from './AudioEngine';
+import { defaultParams, getNodeDefinition } from './nodeRegistry';
 
 declare global {
   interface Window {
     __cheekyEngine?: AudioEngine;
     // Dev-only handle for inspecting the live instances from the console.
-    __cheeky?: { engine: AudioEngine; project: typeof useProjectStore; transport: typeof useTransportStore };
+    __cheeky?: {
+      engine: AudioEngine;
+      project: typeof useProjectStore;
+      transport: typeof useTransportStore;
+      registry: { getNodeDefinition: typeof getNodeDefinition; defaultParams: typeof defaultParams };
+    };
   }
 }
 
@@ -27,5 +33,10 @@ window.addEventListener('pointerdown', resumeOnGesture, { once: true });
 window.addEventListener('keydown', resumeOnGesture, { once: true });
 
 if (import.meta.env.DEV) {
-  window.__cheeky = { engine, project: useProjectStore, transport: useTransportStore };
+  window.__cheeky = {
+    engine,
+    project: useProjectStore,
+    transport: useTransportStore,
+    registry: { getNodeDefinition, defaultParams },
+  };
 }

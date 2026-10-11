@@ -130,7 +130,26 @@ export class AudioEngine {
 
   stop() {
     this.transport.stop();
+    for (const { module } of this.modules.values()) module.onStop?.();
     useTransportStore.setState({ isPlaying: false, currentStep: -1 });
+  }
+
+  // Live playing (computer keys, on-screen keyboard, MIDI) goes straight to the module.
+  noteOn(nodeId: string, pitch: number, velocity: number) {
+    if (this.ctx.state === 'suspended') void this.ctx.resume();
+    this.modules.get(nodeId)?.module.noteOn?.(pitch, velocity, this.ctx.currentTime);
+  }
+
+  noteOff(nodeId: string, pitch: number) {
+    this.modules.get(nodeId)?.module.noteOff?.(pitch, this.ctx.currentTime);
+  }
+
+  // Where the playhead is, in fractional steps since play, compensating for
+  // output latency so recorded notes land where they were heard.
+  playheadPosition(): number | null {
+    if (!this.transport.isRunning) return null;
+    const latency = (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0);
+    return this.transport.positionAt(this.ctx.currentTime - latency);
   }
 
   togglePlay() {

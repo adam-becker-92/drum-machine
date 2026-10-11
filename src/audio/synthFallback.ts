@@ -2,9 +2,9 @@
 // (oscillators, filtered noise, gain envelopes). Swap in real samples via
 // /public/samples and these are never called again for that track.
 
-const noiseBufferCache = new WeakMap<AudioContext, AudioBuffer>();
+const noiseBufferCache = new WeakMap<BaseAudioContext, AudioBuffer>();
 
-function getNoiseBuffer(ctx: AudioContext): AudioBuffer {
+export function getNoiseBuffer(ctx: BaseAudioContext): AudioBuffer {
   let buffer = noiseBufferCache.get(ctx);
   if (!buffer) {
     buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);

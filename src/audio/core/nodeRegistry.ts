@@ -11,6 +11,7 @@ import {
   OutputModule,
   ReverbModule,
 } from '../modules/effects';
+import { INSTRUMENT_DEFINITIONS } from './instrumentDefinitions';
 import type { NodeCategory, NodeDefinition, Params } from './types';
 
 const FILTER_TYPES = [
@@ -43,6 +44,7 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     createClip: () => ({ kind: 'drum', pattern: starterPattern() }),
     create: (ctx) => new DrumMachineModule(ctx),
   },
+  ...INSTRUMENT_DEFINITIONS,
   {
     type: 'filter',
     label: 'Filter',

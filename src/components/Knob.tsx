@@ -1,4 +1,6 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
+import { noteName } from '../audio/dsp';
+import { SWEEP, followPointer, startKnobDrag, type KnobDrag } from './knobMath';
 
 interface KnobProps {
   label: string;
@@ -8,13 +10,12 @@ interface KnobProps {
   defaultValue: number;
   scale?: 'linear' | 'log';
   unit?: string;
+  // Snap to multiples of this (e.g. 1 for semitones).
+  step?: number;
   size?: number;
   color?: string;
   onChange: (value: number) => void;
 }
-
-const SWEEP = 270;
-const DRAG_PIXELS = 180;
 
 function toNorm(value: number, min: number, max: number, log: boolean): number {
   const t = log ? Math.log(value / min) / Math.log(max / min) : (value - min) / (max - min);
@@ -27,6 +28,9 @@ function fromNorm(t: number, min: number, max: number, log: boolean): number {
 }
 
 function formatValue(value: number, unit?: string): string {
+  if (unit === 'note') return noteName(Math.round(value));
+  if (unit === 'st') return `${value > 0 ? '+' : ''}${Math.round(value)}st`;
+  if (unit === 'ct') return `${value > 0 ? '+' : ''}${Math.round(value)}ct`;
   if (unit === 'Hz' && value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
   const abs = Math.abs(value);
   const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
@@ -43,10 +47,16 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
   return `M ${sx} ${sy} A ${r} ${r} 0 ${large} 1 ${ex} ${ey}`;
 }
 
-// Drag up/down to turn (hold Shift for fine control), double-click to reset.
-export function Knob({ label, value, min, max, defaultValue, scale, unit, size = 40, color, onChange }: KnobProps) {
+// A rotary control: press and drag around it and the pointer follows your mouse
+// (drag further out for finer movement; hold Shift to turn it slowly).
+// Double-click resets, arrow keys nudge.
+export function Knob({ label, value, min, max, defaultValue, scale, unit, step, size = 40, color, onChange }: KnobProps) {
   const log = scale === 'log' && min > 0;
-  const drag = useRef<{ y: number; t: number; fine: boolean } | null>(null);
+  const drag = useRef<KnobDrag | null>(null);
+  const emit = (v: number) => {
+    const snapped = step ? Math.round(v / step) * step : v;
+    if (snapped !== value) onChange(Math.min(max, Math.max(min, snapped)));
+  };
   const t = toNorm(value, min, max, log);
   const start = -SWEEP / 2;
   // Bipolar params (e.g. pan) draw their arc from the centre.
@@ -57,16 +67,21 @@ export function Knob({ label, value, min, max, defaultValue, scale, unit, size =
   const c = size / 2;
   const angle = start + SWEEP * t;
 
+  const follow = (d: KnobDrag, e: PointerEvent) => {
+    const next = followPointer(d, e.clientX, e.clientY, e.shiftKey);
+    if (next !== null) emit(fromNorm(next, min, max, log));
+  };
+
+  // A plain press snaps the knob to the pointer; a Shift-press grabs it where it is.
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { y: e.clientY, t, fine: e.shiftKey };
+    drag.current = startKnobDrag(e.currentTarget.getBoundingClientRect(), t);
+    follow(drag.current, e);
   };
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (!drag.current) return;
-    const pixels = e.shiftKey ? DRAG_PIXELS * 5 : DRAG_PIXELS;
-    const next = drag.current.t + (drag.current.y - e.clientY) / pixels;
-    onChange(fromNorm(next, min, max, log));
+    if (drag.current) follow(drag.current, e);
   };
 
   const onPointerUp = () => {
@@ -77,7 +92,9 @@ export function Knob({ label, value, min, max, defaultValue, scale, unit, size =
     const delta = e.key === 'ArrowUp' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowDown' || e.key === 'ArrowLeft' ? -1 : 0;
     if (!delta) return;
     e.preventDefault();
-    onChange(fromNorm(t + delta * (e.shiftKey ? 0.002 : 0.02), min, max, log));
+    // Stepped knobs move one step per press; continuous ones by 2% (0.2% with Shift).
+    if (step) emit(value + delta * step);
+    else emit(fromNorm(t + delta * (e.shiftKey ? 0.002 : 0.02), min, max, log));
   };
 
   return (
@@ -97,7 +114,7 @@ export function Knob({ label, value, min, max, defaultValue, scale, unit, size =
         onPointerCancel={onPointerUp}
         onDoubleClick={() => onChange(defaultValue)}
         onKeyDown={onKeyDown}
-        title={`${label}: ${formatValue(value, unit)}${unit === 'Hz' ? ' Hz' : ''} (double-click to reset)`}
+        title={`${label}: ${formatValue(value, unit)}${unit === 'Hz' ? ' Hz' : ''} · drag around to turn, Shift for fine, double-click to reset`}
       >
         <svg width={size} height={size}>
           <path className="knob-track" d={arcPath(c, c, r, start, start + SWEEP)} />

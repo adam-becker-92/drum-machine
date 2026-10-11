@@ -4,6 +4,7 @@ import { GRAPH_TAB, useProjectStore } from '../../state/projectStore';
 import { ParamPanel } from '../ParamControl';
 import { Scope } from '../Scope';
 import { DrumMachineEditor } from './DrumMachineEditor';
+import { InstrumentEditor } from './InstrumentEditor';
 
 export function NodeEditor({ nodeId }: { nodeId: string }) {
   const node = useProjectStore((s) => s.nodes.find((n) => n.id === nodeId));
@@ -35,6 +36,8 @@ export function NodeEditor({ nodeId }: { nodeId: string }) {
 
       {node.type === 'drumMachine' ? (
         <DrumMachineEditor node={node} />
+      ) : def.playable ? (
+        <InstrumentEditor node={node} />
       ) : (
         <section className="editor-card generic-editor">
           {node.type === 'master' && (

@@ -6,6 +6,7 @@ import { GraphView } from './components/graph/GraphView';
 import { TabBar } from './components/TabBar';
 import { Transport } from './components/Transport';
 import { UndoToast } from './components/UndoToast';
+import { useComputerKeyboard } from './components/useComputerKeyboard';
 import {
   GRAPH_TAB,
   MAX_BPM,
@@ -34,6 +35,7 @@ function App() {
   const [undo, setUndo] = useState<{ message: string; snapshot: ProjectData } | null>(null);
   // Bumped when the whole project is swapped so the graph re-reads (or re-fits) its view.
   const [graphKey, setGraphKey] = useState(0);
+  useComputerKeyboard();
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

@@ -3,9 +3,14 @@ import type { Pattern } from '../types';
 export type ParamValue = number | string | boolean;
 export type Params = Record<string, ParamValue>;
 
-export interface NumberParamSpec {
+interface BaseParamSpec {
   key: string;
   label: string;
+  // Editors lay knobs out in labelled sections by group (e.g. "Filter").
+  group?: string;
+}
+
+export interface NumberParamSpec extends BaseParamSpec {
   kind: 'number';
   min: number;
   max: number;
@@ -16,17 +21,13 @@ export interface NumberParamSpec {
   scale?: 'linear' | 'log';
 }
 
-export interface SelectParamSpec {
-  key: string;
-  label: string;
+export interface SelectParamSpec extends BaseParamSpec {
   kind: 'select';
   options: { value: string; label: string }[];
   default: string;
 }
 
-export interface BoolParamSpec {
-  key: string;
-  label: string;
+export interface BoolParamSpec extends BaseParamSpec {
   kind: 'bool';
   default: boolean;
 }
@@ -38,7 +39,27 @@ export interface DrumClip {
   pattern: Pattern;
 }
 
-export type Clip = DrumClip;
+// Times are in 16th-note steps from the start of the clip.
+export interface Note {
+  id: string;
+  pitch: number; // MIDI note number
+  start: number;
+  length: number;
+  velocity: number; // 0..1
+}
+
+export interface NoteClip {
+  kind: 'notes';
+  length: number; // steps: 16, 32 or 64
+  notes: Note[];
+}
+
+export type Clip = DrumClip | NoteClip;
+
+export interface Preset {
+  name: string;
+  params: Params;
+}
 
 // Every box on the Synth Graph is backed by one AudioModule. Edges connect a
 // module's `output` to one of another module's `inputs` (handle `in-<index>`).
@@ -51,6 +72,11 @@ export interface AudioModule {
   // Called by the global Transport for every 16th note; `step` counts up from 0
   // since play was pressed, so modules wrap it to their own clip length.
   scheduleStep?(step: number, time: number): void;
+  // Transport stopped: silence anything still sounding and forget pending note-offs.
+  onStop?(): void;
+  // Playable instruments (live keys, MIDI in).
+  noteOn?(pitch: number, velocity: number, time: number): void;
+  noteOff?(pitch: number, time: number): void;
   dispose(): void;
 }
 
@@ -70,6 +96,9 @@ export interface NodeDefinition {
   inlineParams: string[];
   // Only one instance allowed (e.g. the master Output).
   singleton?: boolean;
+  // Responds to noteOn/noteOff and gets a piano roll + live keys in its editor.
+  playable?: boolean;
+  presets?: Preset[];
   extraDefaults?: () => Params;
   createClip?: () => Clip;
   create(ctx: AudioContext): AudioModule;
