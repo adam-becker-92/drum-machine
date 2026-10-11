@@ -23,7 +23,11 @@ export const MIN_BPM = 40;
 export const MAX_BPM = 240;
 const PROJECT_VERSION = 1;
 
-interface ProjectData {
+// `?project=name` keeps a separately saved project (handy for a scratch copy in another tab).
+const projectName = new URLSearchParams(window.location.search).get('project');
+const STORAGE_KEY = projectName ? `cheeky-synth.project.${projectName}` : 'cheeky-synth.project';
+
+export interface ProjectData {
   nodes: SynthNode[];
   edges: Edge[];
   clips: Record<string, Clip>;
@@ -37,17 +41,24 @@ interface ProjectActions {
   onNodesChange: (changes: NodeChange<SynthNode>[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
+  // Moves one end of an existing cable; refused (cable kept) if it would form a loop.
+  reconnectEdge: (oldEdge: Edge, connection: Connection) => void;
+  removeEdge: (edgeId: string) => void;
+  // Splices an unconnected node into an existing cable: A -> B becomes A -> node -> B.
+  insertNodeOnEdge: (nodeId: string, edgeId: string) => boolean;
   addNode: (type: string, position: { x: number; y: number }) => string | null;
   updateParams: (nodeId: string, patch: Record<string, ParamValue>) => void;
   renameNode: (nodeId: string, name: string) => void;
   toggleDrumStep: (nodeId: string, trackId: string, step: number) => void;
   clearClip: (nodeId: string) => void;
+  clearAllClips: () => void;
   setBpm: (bpm: number) => void;
   openTab: (nodeId: string) => void;
   closeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   setViewport: (viewport: Viewport) => void;
   resetProject: () => void;
+  loadProject: (data: ProjectData) => void;
 }
 
 export type ProjectState = ProjectData & ProjectActions;
@@ -113,6 +124,25 @@ function uniqueName(nodes: SynthNode[], base: string): string {
   return `${base} ${i}`;
 }
 
+function emptyClip(clip: Clip): Clip {
+  const pattern: Record<string, boolean[]> = {};
+  for (const id of Object.keys(clip.pattern)) pattern[id] = new Array(STEP_COUNT).fill(false);
+  return { ...clip, pattern };
+}
+
+// The saved/undoable part of the state (everything except the actions).
+export function pickProjectData(state: ProjectData): ProjectData {
+  return {
+    nodes: state.nodes.map(({ dragging: _dragging, ...n }) => n),
+    edges: state.edges,
+    clips: state.clips,
+    bpm: state.bpm,
+    openTabs: state.openTabs,
+    activeTab: state.activeTab,
+    viewport: state.viewport,
+  };
+}
+
 export const useProjectStore = create<ProjectState>()(
   persist(
     (set, get) => ({
@@ -142,6 +172,34 @@ export const useProjectStore = create<ProjectState>()(
         const { edges } = get();
         if (wouldCreateCycle(edges, connection.source, connection.target)) return;
         set({ edges: addEdge(connection, edges) });
+      },
+
+      reconnectEdge: (oldEdge, connection) => {
+        const others = get().edges.filter((e) => e.id !== oldEdge.id);
+        if (wouldCreateCycle(others, connection.source, connection.target)) return;
+        set({ edges: addEdge(connection, others) });
+      },
+
+      removeEdge: (edgeId) => set((state) => ({ edges: state.edges.filter((e) => e.id !== edgeId) })),
+
+      insertNodeOnEdge: (nodeId, edgeId) => {
+        const { nodes, edges } = get();
+        const node = nodes.find((n) => n.id === nodeId);
+        const def = getNodeDefinition(node?.type);
+        const edge = edges.find((e) => e.id === edgeId);
+        if (!def || !def.inputs.length || !def.hasOutput || !edge) return false;
+        if (edges.some((e) => e.source === nodeId || e.target === nodeId)) return false;
+        let next = edges.filter((e) => e.id !== edgeId);
+        next = addEdge(
+          { source: edge.source, sourceHandle: edge.sourceHandle ?? OUTPUT_HANDLE, target: nodeId, targetHandle: inputHandleId(0) },
+          next,
+        );
+        next = addEdge(
+          { source: nodeId, sourceHandle: OUTPUT_HANDLE, target: edge.target, targetHandle: edge.targetHandle ?? inputHandleId(0) },
+          next,
+        );
+        set({ edges: next });
+        return true;
       },
 
       addNode: (type, position) => {
@@ -184,15 +242,14 @@ export const useProjectStore = create<ProjectState>()(
 
       clearClip: (nodeId) =>
         set((state) => {
-          const node = state.nodes.find((n) => n.id === nodeId);
-          const def = getNodeDefinition(node?.type);
-          if (!def?.createClip) return {};
-          const fresh = def.createClip();
-          if (fresh.kind === 'drum') {
-            for (const id of Object.keys(fresh.pattern)) fresh.pattern[id] = new Array(STEP_COUNT).fill(false);
-          }
-          return { clips: { ...state.clips, [nodeId]: fresh } };
+          const clip = state.clips[nodeId];
+          return clip ? { clips: { ...state.clips, [nodeId]: emptyClip(clip) } } : {};
         }),
+
+      clearAllClips: () =>
+        set((state) => ({
+          clips: Object.fromEntries(Object.entries(state.clips).map(([id, clip]) => [id, emptyClip(clip)])),
+        })),
 
       setBpm: (bpm) => set({ bpm: Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(bpm) || MIN_BPM)) }),
 
@@ -216,19 +273,13 @@ export const useProjectStore = create<ProjectState>()(
       setViewport: (viewport) => set({ viewport }),
 
       resetProject: () => set(createDefaultProject()),
+
+      loadProject: (data) => set(data),
     }),
     {
-      name: 'cheeky-synth.project',
+      name: STORAGE_KEY,
       version: PROJECT_VERSION,
-      partialize: (state): ProjectData => ({
-        nodes: state.nodes.map(({ dragging: _dragging, ...n }) => n),
-        edges: state.edges,
-        clips: state.clips,
-        bpm: state.bpm,
-        openTabs: state.openTabs,
-        activeTab: state.activeTab,
-        viewport: state.viewport,
-      }),
+      partialize: (state) => pickProjectData(state),
       // Fill in params added to a node type after the project was saved.
       merge: (persisted, current) => {
         const saved = persisted as Partial<ProjectData> | undefined;

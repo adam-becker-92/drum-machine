@@ -13,7 +13,14 @@ bun run build    # type-check + production build
 bun run lint     # oxlint
 ```
 
-Space toggles play/stop. The project autosaves to `localStorage`; **New project** resets it.
+Space toggles play/stop. **CLEAR** empties every pattern (your graph and sounds stay), **Reset** restores the starter patch, and both offer Undo. The project autosaves to `localStorage`; add `?project=name` to the URL to work on a separately saved project.
+
+### Patching
+
+- Drag from an **Out** port to an **In** port to connect. An input can take several cables, and they're summed.
+- Drop an effect onto a cable to splice it in, either dragged from the palette or an unconnected node dragged from the canvas. The cable lights up first.
+- Drag a cable off an input (or grab either end of it) and drop it on empty space to unplug it, or on another input to re-route it.
+- Select and press Delete to remove nodes or cables.
 
 ## What's in it (Phase 1)
 

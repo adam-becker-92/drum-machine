@@ -5,9 +5,10 @@ interface TransportProps {
   minBpm: number;
   maxBpm: number;
   onBpmChange: (bpm: number) => void;
+  onClear: () => void;
 }
 
-export function Transport({ isPlaying, onTogglePlay, bpm, minBpm, maxBpm, onBpmChange }: TransportProps) {
+export function Transport({ isPlaying, onTogglePlay, bpm, minBpm, maxBpm, onBpmChange, onClear }: TransportProps) {
   return (
     <div className="transport">
       <button
@@ -30,6 +31,15 @@ export function Transport({ isPlaying, onTogglePlay, bpm, minBpm, maxBpm, onBpmC
         />
         <span className="bpm-unit">BPM</span>
       </label>
+
+      <button
+        type="button"
+        className="clear-button"
+        onClick={onClear}
+        title="Clear every pattern in the project (keeps your graph and sounds)"
+      >
+        CLEAR
+      </button>
     </div>
   );
 }

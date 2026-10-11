@@ -6,6 +6,7 @@
       "name": "cheeky-synth",
       "dependencies": {
         "@xyflow/react": "^12.12.0",
+        "@xyflow/system": "0.0.83",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
         "zustand": "^5.0.15",

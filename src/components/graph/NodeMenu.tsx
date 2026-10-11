@@ -2,8 +2,7 @@ import type { CSSProperties, DragEvent } from 'react';
 import { CATEGORY_LABELS, NODE_DEFINITIONS } from '../../audio/core/nodeRegistry';
 import type { NodeCategory } from '../../audio/core/types';
 import { useProjectStore } from '../../state/projectStore';
-
-export const NODE_DRAG_MIME = 'application/x-cheeky-node';
+import { NODE_DRAG_MIME, beginPaletteDrag, endPaletteDrag } from './paletteDrag';
 
 const CATEGORIES: NodeCategory[] = ['source', 'effect', 'utility', 'output'];
 
@@ -20,6 +19,7 @@ export function NodeMenu({ onPick, draggable }: NodeMenuProps) {
   const onDragStart = (e: DragEvent, type: string) => {
     e.dataTransfer.setData(NODE_DRAG_MIME, type);
     e.dataTransfer.effectAllowed = 'move';
+    beginPaletteDrag(type);
   };
 
   return (
@@ -41,6 +41,7 @@ export function NodeMenu({ onPick, draggable }: NodeMenuProps) {
                   disabled={disabled}
                   draggable={draggable && !disabled}
                   onDragStart={(e) => onDragStart(e, def.type)}
+                  onDragEnd={endPaletteDrag}
                   onClick={() => onPick(def.type)}
                   title={disabled ? 'Only one allowed' : def.description}
                 >

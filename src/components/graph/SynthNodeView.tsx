@@ -1,11 +1,13 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { CSSProperties } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { getNodeDefinition } from '../../audio/core/nodeRegistry';
 import { OUTPUT_HANDLE, inputHandleId } from '../../audio/core/types';
 import { STEP_COUNT, TRACKS } from '../../audio/tracks';
 import { useProjectStore, useTransportStore, type SynthNode } from '../../state/projectStore';
 import { ParamControl } from '../ParamControl';
 import { Scope } from '../Scope';
+import { useCablePickup } from './useCablePickup';
 
 function DrumPreview({ nodeId }: { nodeId: string }) {
   const clip = useProjectStore((s) => s.clips[nodeId]);
@@ -32,7 +34,12 @@ export function SynthNodeView({ id, type, data, selected }: NodeProps<SynthNode>
   const def = getNodeDefinition(type);
   const updateParams = useProjectStore((s) => s.updateParams);
   const openTab = useProjectStore((s) => s.openTab);
+  const incoming = useProjectStore(useShallow((s) => s.edges.filter((e) => e.target === id)));
+  const pickUpCable = useCablePickup();
   if (!def) return null;
+
+  // The most recently plugged cable on an input is the one a drag picks up.
+  const cableAt = (handle: string) => incoming.findLast((e) => e.targetHandle === handle);
 
   const rows = Math.max(def.inputs.length, def.hasOutput ? 1 : 0);
   const inlineSpecs = def.inlineParams
@@ -60,22 +67,34 @@ export function SynthNodeView({ id, type, data, selected }: NodeProps<SynthNode>
       </div>
 
       <div className="synth-node-ports">
-        {Array.from({ length: rows }, (_, i) => (
-          <div className="port-row" key={i}>
-            {def.inputs[i] !== undefined && (
-              <>
-                <Handle type="target" position={Position.Left} id={inputHandleId(i)} className="port port-in" />
-                <span className="port-label in">{def.inputs[i]}</span>
-              </>
-            )}
-            {i === 0 && def.hasOutput && (
-              <>
-                <span className="port-label out">Out</span>
-                <Handle type="source" position={Position.Right} id={OUTPUT_HANDLE} className="port port-out" />
-              </>
-            )}
-          </div>
-        ))}
+        {Array.from({ length: rows }, (_, i) => {
+          const cable = cableAt(inputHandleId(i));
+          return (
+            <div className="port-row" key={i}>
+              {def.inputs[i] !== undefined && (
+                <>
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={inputHandleId(i)}
+                    className={`port port-in ${cable ? 'plugged' : ''}`}
+                    isConnectableStart={!cable}
+                    onMouseDown={cable ? (e) => pickUpCable(e, cable) : undefined}
+                    onTouchStart={cable ? (e) => pickUpCable(e, cable) : undefined}
+                    title={cable ? 'Drag to unplug or re-route this cable' : undefined}
+                  />
+                  <span className="port-label in">{def.inputs[i]}</span>
+                </>
+              )}
+              {i === 0 && def.hasOutput && (
+                <>
+                  <span className="port-label out">Out</span>
+                  <Handle type="source" position={Position.Right} id={OUTPUT_HANDLE} className="port port-out" />
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {type === 'drumMachine' && <DrumPreview nodeId={id} />}

@@ -120,6 +120,66 @@
   font-size: 11px;
 }
 
+.clear-button {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--step-off);
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.clear-button:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+/* ---------- Undo toast ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 10px 10px 16px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel-light);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.toast-undo {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  color: #1c1c1e;
+  background: var(--amber);
+  border: none;
+  border-radius: 5px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.toast-close {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
 /* ---------- Tabs ---------- */
 
 .tab-bar {
@@ -213,7 +273,12 @@
   font-size: 11px;
   line-height: 1.5;
   color: var(--text-dim);
-  margin-top: 16px;
+  margin: 16px 0 0;
+  padding-left: 14px;
+}
+
+.graph-palette-hint li + li {
+  margin-top: 6px;
 }
 
 .graph-palette-hint b {
@@ -380,6 +445,16 @@
 .react-flow__handle.port.connectingto,
 .react-flow__handle.port:hover {
   box-shadow: 0 0 0 3px var(--amber-dim);
+}
+
+/* An input with a cable in it: dragging it picks the cable up. */
+.react-flow__handle.port-in.plugged {
+  background: var(--text);
+  cursor: grab;
+}
+
+.react-flow__edge.splice-target .react-flow__edge-path {
+  filter: drop-shadow(0 0 5px var(--amber));
 }
 
 .synth-node-knobs {

@@ -23,6 +23,8 @@ export class AudioEngine {
   private edges = new Map<string, Edge>();
   private transport: Transport;
   private bpm = 0;
+  private unsubscribe: (() => void) | null = null;
+  private destroyed = false;
 
   constructor() {
     this.ctx = new AudioContext({ latencyHint: 'interactive' });
@@ -35,9 +37,14 @@ export class AudioEngine {
     );
   }
 
-  bind(store: UseBoundStore<StoreApi<ProjectState>>): () => void {
+  bind(store: UseBoundStore<StoreApi<ProjectState>>) {
+    this.unsubscribe?.();
     this.sync(store.getState());
-    return store.subscribe((state) => this.sync(state));
+    this.unsubscribe = store.subscribe((state) => this.sync(state));
+  }
+
+  get isPlaying(): boolean {
+    return this.transport.isRunning;
   }
 
   getModule<T extends AudioModule = AudioModule>(nodeId: string): T | undefined {
@@ -132,6 +139,10 @@ export class AudioEngine {
   }
 
   destroy() {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.unsubscribe?.();
+    this.unsubscribe = null;
     this.stop();
     for (const { module } of this.modules.values()) module.dispose();
     this.modules.clear();

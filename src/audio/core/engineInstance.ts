@@ -1,18 +1,31 @@
-import { useProjectStore } from '../../state/projectStore';
+import { useProjectStore, useTransportStore } from '../../state/projectStore';
 import { AudioEngine } from './AudioEngine';
 
-// One engine for the whole app, bound to the project store.
+declare global {
+  interface Window {
+    __cheekyEngine?: AudioEngine;
+    // Dev-only handle for inspecting the live instances from the console.
+    __cheeky?: { engine: AudioEngine; project: typeof useProjectStore; transport: typeof useTransportStore };
+  }
+}
+
+// Exactly one engine may exist per page. A hot reload (or a second copy of
+// this module) would otherwise leave an orphaned engine playing stale state
+// that the UI can no longer reach, so always tear down the previous one.
+const previous = window.__cheekyEngine;
+const wasPlaying = previous?.isPlaying ?? false;
+previous?.destroy();
+
 export const engine = new AudioEngine();
-const unbind = engine.bind(useProjectStore);
+window.__cheekyEngine = engine;
+engine.bind(useProjectStore);
+if (wasPlaying) void engine.play();
 
 // Browsers start the AudioContext suspended until the first user gesture.
 const resumeOnGesture = () => void engine.resume();
 window.addEventListener('pointerdown', resumeOnGesture, { once: true });
 window.addEventListener('keydown', resumeOnGesture, { once: true });
 
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    unbind();
-    engine.destroy();
-  });
+if (import.meta.env.DEV) {
+  window.__cheeky = { engine, project: useProjectStore, transport: useTransportStore };
 }
